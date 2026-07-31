@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCC Network Planner</title>
+
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+
+<script>
+/* ==================================================================
+   CONFIG
+   ================================================================== */
+var CONFIG = {
+  API_URL: 'https://script.google.com/macros/s/AKfycbyQ-uN2ocf1HxjNryJVtBY2wx5-SL3vbIfeOwHb54Wj4cZZ56Csv374grHRWmTODMRk/exec',
+  STYLE: 'https://tiles.openfreemap.org/styles/liberty',
+  CENTRE: [73.8567, 18.5204],
+  ZOOM: 11,
+  SEARCH_NEAR: { lat: 18.5204, lon: 73.8567 }
+};
+/* ================================================================== */
+</script>
+
+<style>
+  :root{
+    --olt:#1A73E8; --port:#00897B; --fibre:#43A047;
+    --coupler:#F57C00; --fatbox:#7B1FA2; --loc:#5F6368;
+    --ink:#202124; --grey:#5F6368; --line:#DADCE0;
+    --bg:#fff; --hover:#F1F3F4; --soft:#E8F0FE; --red:#D93025; --green:#137333;
+    --side:404px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  button,input{ font-family:inherit; }
+
+  #map{ position:fixed; top:0; bottom:0; right:0; left:var(--side); background:#E8EAED; }
+
+  .gate{
+    position:fixed; inset:0; z-index:2000; background:#fff;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .gate.off{ display:none; }
+  .gate__card{ width:100%; max-width:340px; text-align:center; }
+  .gate__logo{ height:52px; margin-bottom:22px; }
+  .gate h1{ font-size:19px; font-weight:600; margin:0 0 6px; }
+  .gate p{ font-size:13px; color:var(--grey); margin:0 0 22px; line-height:1.55; }
+  .gate input{
+    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:9px;
+    font-size:15px; outline:none; text-align:center;
+  }
+  .gate input:focus{ border-color:var(--olt); box-shadow:0 0 0 1px var(--olt); }
+  .gate input.bad{ border-color:var(--red); }
+  .gate .msg{ font-size:12.5px; margin-top:10px; min-height:18px; }
+  .gate .msg.bad{ color:var(--red); }
+
+  .side{
+    position:fixed; top:0; bottom:0; left:0; width:var(--side);
+    border-right:1px solid var(--line); display:flex; flex-direction:column;
+    z-index:900; background:var(--bg);
+  }
+  .brandbar{
+    display:flex; align-items:center; gap:10px; padding:12px 16px 10px;
+    border-bottom:1px solid var(--line);
+  }
+  .brandbar img{ height:26px; }
+  .brandbar b{ font-size:14px; font-weight:600; }
+
+  .ctx{ padding:10px 16px; background:#FAFBFC; border-bottom:1px solid var(--line); }
+  .ctx__row{ display:flex; align-items:center; gap:7px; font-size:12px; margin-bottom:4px; }
+  .ctx__row:last-child{ margin-bottom:0; }
+  .ctx__k{ color:var(--grey); min-width:62px; }
+  .ctx__v{ font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .ctx__v.none{ color:var(--grey); font-weight:400; font-style:italic; }
+
+  .body{ flex:1; overflow-y:auto; padding:14px 16px 18px; }
+  .foot{ padding:12px 16px; border-top:1px solid var(--line); display:flex; gap:8px; }
+
+  .stepbar{
+    display:flex; justify-content:space-between; font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--olt); font-weight:600; margin-bottom:8px;
+  }
+  h2.title{ font-size:15px; font-weight:600; margin:0 0 5px; }
+  .lead{ font-size:12.5px; color:var(--grey); line-height:1.55; margin:0 0 14px; }
+  .sec{
+    font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--grey);
+    margin:18px 0 8px; font-weight:600; display:flex; justify-content:space-between;
+  }
+
+  .btn{
+    flex:1; padding:10px 12px; border-radius:8px; border:1px solid var(--line);
+    background:var(--bg); font-size:13.5px; font-weight:500; cursor:pointer; color:var(--ink);
+  }
+  .btn:hover:not(:disabled){ background:var(--hover); }
+  .btn.primary{ background:var(--olt); border-color:var(--olt); color:#fff; }
+  .btn.primary:hover:not(:disabled){ background:#1557B0; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn.wide{ width:100%; flex:none; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{
+    display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:20px;
+    border:1px solid var(--line); background:#fff; font-size:12.5px; cursor:pointer;
+  }
+  .chip:hover{ background:var(--hover); }
+  .chip.on{ border-color:var(--olt); background:var(--soft); color:#1557B0; font-weight:600; }
+  .chip.add{ border-style:dashed; color:var(--grey); }
+  .chip .x{
+    border:0; background:transparent; color:var(--grey); cursor:pointer;
+    font-size:14px; line-height:1; padding:0 1px;
+  }
+  .chip .x:hover{ color:var(--red); }
+
+  .row{
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    border:1px solid var(--line); border-radius:8px; margin-bottom:7px; cursor:pointer;
+  }
+  .row:hover{ background:var(--hover); }
+  .row__main{ flex:1; min-width:0; }
+  .row__main b{ display:block; font-size:13.5px; font-weight:500;
+                overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row__main span{ display:block; font-size:11.5px; color:var(--grey);
+                   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .del{
+    border:0; background:transparent; color:var(--grey); cursor:pointer;
+    font-size:17px; line-height:1; padding:2px 5px; border-radius:5px;
+  }
+  .del:hover{ background:#FCE8E6; color:var(--red); }
+
+  .empty{
+    border:1px dashed var(--line); border-radius:9px; padding:18px 14px;
+    text-align:center; font-size:12.5px; color:var(--grey); line-height:1.55;
+  }
+
+  .searchbox{
+    display:flex; align-items:center; gap:9px; border:1px solid var(--line);
+    border-radius:8px; padding:10px 12px;
+  }
+  .searchbox:focus-within{ border-color:var(--olt); box-shadow:0 0 0 1px var(--olt); }
+  .searchbox input{ flex:1; min-width:0; border:0; outline:0; font-size:14px; }
+  .spin{ width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--olt);
+         border-radius:50%; animation:sp .7s linear infinite; display:none; }
+  .spin.on{ display:block; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  .hits{ border:1px solid var(--line); border-radius:8px; margin-top:8px; overflow:hidden; display:none; }
+  .hits.on{ display:block; }
+  .hit{ padding:10px 12px; border-bottom:1px solid #EEF0F2; cursor:pointer; }
+  .hit:last-child{ border-bottom:0; }
+  .hit:hover{ background:var(--hover); }
+  .hit b{ display:block; font-size:13.5px; font-weight:500; }
+  .hit span{ font-size:11.5px; color:var(--grey); }
+
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-size:12px; color:var(--grey); margin-bottom:5px; }
+  .field label i{ color:var(--red); font-style:normal; }
+  .field input{
+    width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:8px;
+    font-size:14px; outline:none;
+  }
+  .field input:focus{ border-color:var(--olt); box-shadow:0 0 0 1px var(--olt); }
+  .field input.bad{ border-color:var(--red); }
+  .two{ display:flex; gap:10px; } .two .field{ flex:1; }
+  .msg{ font-size:12.5px; line-height:1.5; margin-top:10px; }
+  .msg.bad{ color:var(--red); } .msg.good{ color:var(--green); }
+
+  .fab{
+    position:fixed; z-index:800; left:calc(var(--side) + 16px); bottom:20px;
+    display:flex; align-items:center; gap:8px; padding:12px 18px;
+    border-radius:26px; border:0; background:var(--olt); color:#fff;
+    font-size:14px; font-weight:600; cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,.28);
+  }
+  .fab:hover{ background:#1557B0; }
+  .fab.off{ display:none; }
+
+  .legend{
+    position:fixed; z-index:800; right:12px; bottom:20px;
+    background:rgba(255,255,255,.96); border:1px solid var(--line); border-radius:9px;
+    padding:9px 11px; box-shadow:0 2px 8px rgba(0,0,0,.14);
+  }
+  .legend h5{ margin:0 0 6px; font-size:10px; letter-spacing:.06em;
+              text-transform:uppercase; color:var(--grey); font-weight:600; }
+  .legend div{ display:flex; align-items:center; gap:7px; font-size:11.5px; margin-bottom:4px; }
+  .legend div:last-child{ margin-bottom:0; }
+
+  .mk{ cursor:pointer; }
+  .mk.dim{ opacity:.42; }
+  .mk.dim:hover{ opacity:1; }
+
+  .zoomhint{
+    position:fixed; z-index:800; left:calc(var(--side) + 16px); top:12px;
+    background:rgba(255,255,255,.96); border:1px solid var(--line); border-radius:8px;
+    padding:7px 11px; font-size:12px; color:var(--grey);
+    box-shadow:0 2px 8px rgba(0,0,0,.12); display:none;
+  }
+  .zoomhint.on{ display:block; }
+  /* One marker per office. Its shape and colour show how far it is set up:
+     circle/black = location only, square/grey = OLT added, diamond/blue = port added. */
+  .mk-loc{
+    width:14px; height:14px; border-radius:50%; background:#202124;
+    border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.45);
+  }
+  .mk-olt{
+    width:16px; height:16px; border-radius:3px; background:#80868B;
+    border:2.5px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45);
+  }
+  .mk-port{
+    width:15px; height:15px; background:var(--olt); transform:rotate(45deg);
+    border:2.5px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45);
+  }
+  .mk-fibre{
+    width:13px; height:13px; border-radius:50%; background:var(--fibre);
+    border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .mk-coupler{
+    width:0; height:0; border-left:8px solid transparent; border-right:8px solid transparent;
+    border-bottom:14px solid var(--coupler); filter:drop-shadow(0 1px 2px rgba(0,0,0,.45));
+  }
+  .mk-fatbox{
+    width:15px; height:15px; background:var(--fatbox); border:2px solid #fff;
+    clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
+    box-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .mk-drag{
+    width:16px; height:16px; border-radius:50%; border:3px solid #fff;
+    box-shadow:0 2px 6px rgba(0,0,0,.5); cursor:grab;
+  }
+  .mk-drag:active{ cursor:grabbing; }
+  .mk.pulse{ animation:pl 1.5s ease-out infinite; }
+  @keyframes pl{ 0%{ box-shadow:0 0 0 0 rgba(26,115,232,.5); } 100%{ box-shadow:0 0 0 15px rgba(26,115,232,0); } }
+
+  .maplibregl-popup-content{ border-radius:10px; padding:13px 15px; }
+  .pop{ min-width:190px; max-width:250px; }
+  .pop h4{ margin:0 0 2px; font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:7px; }
+  .pop .meta{ font-size:11.5px; color:var(--grey); line-height:1.65; margin:7px 0 0; }
+  .pop .meta b{ color:var(--ink); font-weight:500; }
+  .pop hr{ border:0; border-top:1px solid var(--line); margin:10px 0; }
+  .pop .lbl{ font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+             color:var(--grey); font-weight:600; margin-bottom:6px; }
+  .pop .types{ display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+  .pop .t{
+    padding:7px 5px; border-radius:6px; border:1.5px solid var(--line); background:#fff;
+    font-size:11px; font-weight:600; cursor:pointer;
+  }
+
+  .draft{
+    position:fixed; z-index:950; right:12px; top:12px; width:270px;
+    background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px;
+    box-shadow:0 6px 22px rgba(0,0,0,.22); display:none;
+  }
+  .draft.on{ display:block; }
+  .draft h4{ margin:0 0 4px; font-size:13.5px; font-weight:600; }
+  .draft p{ margin:3px 0; font-size:12px; color:var(--grey); }
+  .draft p b{ color:var(--ink); }
+  .draft .acts{ display:flex; gap:7px; margin-top:12px; }
+
+  .toast{
+    position:fixed; z-index:1100; left:50%; bottom:24px; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 16px; border-radius:8px;
+    font-size:13px; opacity:0; pointer-events:none; transition:opacity .2s; max-width:80vw;
+  }
+  .toast.on{ opacity:1; }
+
+  @media (max-width:860px){
+    :root{ --side:100%; }
+    #map{ left:0; top:0; bottom:56%; }
+    .side{ top:44%; width:100%; border-right:0; border-top:1px solid var(--line); }
+    .fab{ left:auto; right:12px; bottom:auto; top:12px; padding:10px 14px; font-size:13px; }
+    .legend{ right:12px; bottom:auto; top:64px; }
+    .draft{ left:8px; right:8px; width:auto; }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate__card">
+    <img class="gate__logo" id="gateLogo" alt="SCC">
+    <h1>Network Planner</h1>
+    <p>Enter the edit key to continue.</p>
+    <input id="gateKey" type="password" placeholder="Edit key" autocomplete="current-password">
+    <div class="msg" id="gateMsg"></div>
+    <button class="btn primary wide" id="gateGo" style="margin-top:14px">Continue</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<aside class="side">
+  <div class="brandbar">
+    <img id="brandLogo" alt="SCC">
+    <b>Network Planner</b>
+  </div>
+  <div class="ctx" id="ctx"></div>
+  <div class="body" id="body"></div>
+  <div class="foot" id="foot"></div>
+</aside>
+
+<button class="fab off" id="fab">+ &nbsp;Add Location</button>
+
+<div class="zoomhint" id="zoomhint">Zoom in to see OLTs, ports and runs</div>
+
+<div class="legend" id="legend" style="display:none">
+  <h5>Legend</h5>
+  <div><span class="mk-loc" style="width:11px;height:11px"></span> Office only</div>
+  <div><span class="mk-olt" style="width:11px;height:11px;border-width:2px"></span> OLT added</div>
+  <div><span class="mk-port" style="width:11px;height:11px;border-width:2px"></span> Port added</div>
+  <div><span class="mk-fibre" style="width:10px;height:10px"></span> Fibre</div>
+  <div><span class="mk-coupler" style="border-left-width:6px;border-right-width:6px;border-bottom-width:11px"></span> Coupler</div>
+  <div><span class="mk-fatbox" style="width:11px;height:11px"></span> FAT box</div>
+</div>
+
+<div class="draft" id="draft"></div>
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+
+<script>
+(function(){
+  'use strict';
+
+  var LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALAAAABABAMAAABIC+B0AAAAHlBMVEX///+NLSYcFBNlLihmaGiZmZrOzs49QUEAAAAAAABVtKXnAAAACHRSTlMA/////////9XKVDIAAAP4SURBVHja7Vi7btRAFD2e3TU0bLwJCPGI1puGIgiQaHkEJDoQK6SUoBVCdPwQBUpBhwSLEKIAAX9AAhQIoo0NQtCwcRxEkJ3YFH7MXPveVRq6TLNrn5kzd2bOPTNjYK/872LRR3tQr3JfhCYhhNg+5zF9jwAArdkaoFYz5N6QQZqE1+/UeTeyn1nLqSJh3uPTDoOYxFdXxuM68cGsdWdUxdQBALCPM8gMoPTjnRWGFsoCgPPWqIakLgBc5ZDIJLZft9nljQA0faZP1wHQZKNxTeJti1u5LK4LbJ+OhLgO0CifLqUB17p3+BNa+MEgnReQkDdGxC3f45U+BK6xAYcAbopIScxXySote9Kqep6UdSWx54mp2bJYJAZaPqQuC2Lb53mVBey0pVXdSVgkMoiTRDCTCOjzg3GAvsMiLnTm3Xo3nSgkXj0uDwHf2gEC5cLjBV5M32VhinFqyNhPbk72cQnREc/M5H/Wa2qzzubB08itEZAj8e8a8v+NfhGWg+iPAyBaolVa/fzPoysvBeTJpZcCMWfjJ3P/vrFcvGp8oVVkRM9xMlOVQ/C+nzEH68SAjRJ0RtqAeeKUmfDex+zXN6VHytupAjn6uTZgefrX2gsAYFN9mltZT0JAt6ZqyXbANDGNjswWteZdR4ykvUCah9VlKLsMlyRi3r/87wASh+x+op0JEbORJzsABqZPUtiREE0Y86E4fSDwyK5slD4kxFi8LrfZwhtDe5tba+7JoiinwHXZhG8ZMkZ1hQJJLoDepT/u3+L2glZgT22BdTdAFUhjLEccn57mQm5qtSm7gtmTRKET5NlsebSb0pnb1mJNI1HG8STi+NtFem4tDkg6oz0h8WoeQlM6flW64ZpR8fa7QFj6xAlkUbCJ8Xx3Sz+Y4BQ8ccyKtVYCUYflVCzSd7/Wjca6+aDSvkxJ9IcC8S8alTU2BlSauRfM6c1uZ9Uck4EkzVWD2C9DnAMSc/AWekUvqXHTSDfNOSJIaERsV29IvB+O6CXDsNpR9cqSL14qndvqSWHeHyZbs6JbTPUUdkbo0AVwfWIoihh2TVFDdKWTJpbFk2ZBPBDH1ZBG4gBwXAkpiAMpB9JjklEvCfmm3zYAHPkpEPdOLGNl/1/GxccAPuxjEOuNEbEvzcTmEtBQ0lFSqUkWoYiMaenOA4i7rqCpSERyYknGanMIAG4oyfhtOOH7hxJlrKbmAQAP65t7/iZhkMggFmTcbWaeFS2E0tJ/3XAlGUMJMla9zeJk+mBtmrZ3C7FunwkpovRm0gQCNWdghdGF58pDerPrdeg3l8KZH1+mCIJTxmTTm1h+abDIpWKx9NWM51Ed2T5UQYC7e9/y9got/wDJ8jVoLrOBegAAAABJRU5ErkJggg==';
+
+  var map, ready = false, editKey = '';
+  var data = { locations:[], olts:[], ports:[], objects:[] };
+  var sel = { loc:null, olt:null, port:null };
+  var screen = 'home';
+  var markers = [], popup = null, draft = null, dragMarker = null, idx = null;
+
+  var TYPES = {
+    FIBRE:   { label:'Fibre',   color:'#43A047', cls:'mk-fibre'   },
+    COUPLER: { label:'Coupler', color:'#F57C00', cls:'mk-coupler' },
+    FATBOX:  { label:'FAT box', color:'#7B1FA2', cls:'mk-fatbox'  }
+  };
+
+  function $(id){ return document.getElementById(id); }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  var tt;
+  function toast(m){
+    var t = $('toast'); t.textContent = m; t.classList.add('on');
+    clearTimeout(tt); tt = setTimeout(function(){ t.classList.remove('on'); }, 2600);
+  }
+
+  /* ---------------- geometry ---------------- */
+
+  function offset(lat, lng, metres, bearingDeg){
+    var b = bearingDeg * Math.PI/180;
+    return [ lng + (metres * Math.sin(b)) / (111320 * Math.cos(lat*Math.PI/180)),
+             lat + (metres * Math.cos(b)) / 110574 ];
+  }
+  /* The office, every OLT inside it and every port on those OLTs are physically
+     the same spot. Only objects sit elsewhere, at the end of real cable. */
+  function sitePos(loc){ return [parseFloat(loc.lng), parseFloat(loc.lat)]; }
+  function metres(a1,a2,b1,b2){
+    var R=6371000, dLat=(b1-a1)*Math.PI/180, dLon=(b2-a2)*Math.PI/180;
+    var x=Math.sin(dLat/2)*Math.sin(dLat/2)+
+          Math.cos(a1*Math.PI/180)*Math.cos(b1*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return R*2*Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+  }
+  function fmtM(d){ return d < 1000 ? Math.round(d)+' m' : (d/1000).toFixed(2)+' km'; }
+
+  /* ---------------- selectors ---------------- */
+
+  function oltsOf(loc){ return data.olts.filter(function(o){ return o.locationId === loc.id; }); }
+  function portsOf(olt){ return data.ports.filter(function(p){ return p.oltId === olt.id; }); }
+  function objsOf(port){ return data.objects.filter(function(o){ return o.portId === port.id; }); }
+
+  /**
+   * Positions for the whole tree, so anything can be drawn without needing
+   * to be the current selection.
+   */
+  function buildIndex(){
+    var ix = { olt:{}, port:{}, ownerOfPort:{}, ownerOfOlt:{} };
+
+    data.locations.forEach(function(loc){
+      var at = sitePos(loc);
+      oltsOf(loc).forEach(function(o){
+        ix.olt[o.id] = at;
+        ix.ownerOfOlt[o.id] = loc;
+        portsOf(o).forEach(function(p){
+          ix.port[p.id] = at;
+          ix.ownerOfPort[p.id] = { loc:loc, olt:o };
+        });
+      });
+    });
+    return ix;
+  }
+
+  function currentPortPos(){ return sel.loc ? sitePos(sel.loc) : null; }
+  function endOf(id){
+    var o = data.objects.filter(function(x){ return x.id === id; })[0];
+    return o ? [parseFloat(o.lng), parseFloat(o.lat)] : null;
+  }
+
+  /* ---------------- backend ---------------- */
+
+  function configured(){ return CONFIG.API_URL && CONFIG.API_URL.indexOf('PASTE_') !== 0; }
+
+  function load(){
+    if (!configured()) return Promise.resolve();
+    return fetch(CONFIG.API_URL + '?action=data&cb=' + Date.now())
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (!res.ok) throw new Error(res.error);
+        data.locations = res.locations || [];
+        data.olts = res.olts || [];
+        data.ports = res.ports || [];
+        data.objects = res.objects || [];
+        reselect(); render(); drawMap();
+      });
+  }
+
+  function reselect(){
+    if (sel.loc) sel.loc = data.locations.filter(function(l){ return l.id === sel.loc.id; })[0] || null;
+    if (!sel.loc){ sel.olt = null; sel.port = null; return; }
+
+    var olts = oltsOf(sel.loc);
+    if (sel.olt) sel.olt = olts.filter(function(o){ return o.id === sel.olt.id; })[0] || null;
+    if (!sel.olt) sel.olt = olts[0] || null;
+    if (!sel.olt){ sel.port = null; return; }
+
+    var ports = portsOf(sel.olt);
+    if (sel.port) sel.port = ports.filter(function(p){ return p.id === sel.port.id; })[0] || null;
+    if (!sel.port) sel.port = ports[0] || null;
+  }
+
+  function post(action, payload){
+    if (!configured()) return Promise.reject(new Error('Backend URL not set'));
+    return fetch(CONFIG.API_URL, {
+      method:'POST', headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ action:action, key:editKey }, payload))
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(res){ if (!res.ok) throw new Error(res.error || 'Save failed'); return res; });
+  }
+
+  /* ---------------- map ---------------- */
+
+  function initMap(){
+    map = new maplibregl.Map({
+      container:'map', style:CONFIG.STYLE, center:CONFIG.CENTRE, zoom:CONFIG.ZOOM,
+      maxZoom:21, dragRotate:false, attributionControl:{ compact:true }
+    });
+    map.touchZoomRotate.disableRotation();
+    map.addControl(new maplibregl.NavigationControl({ showCompass:false }), 'bottom-right');
+    map.addControl(new maplibregl.ScaleControl({ unit:'metric' }), 'bottom-left');
+
+    map.on('load', function(){
+      ready = true;
+      map.addSource('runs', { type:'geojson', data:fc([]) });
+      map.addLayer({ id:'run-lines', type:'line', source:'runs',
+        layout:{ 'line-cap':'round', 'line-join':'round' },
+        paint:{ 'line-color':['get','color'],
+                'line-width':['coalesce',['get','w'],3.2],
+                'line-opacity':['coalesce',['get','o'],1] } });
+
+      map.addSource('spurs', { type:'geojson', data:fc([]) });
+      map.addLayer({ id:'spur-lines', type:'line', source:'spurs',
+        paint:{ 'line-color':'#9AA0A6', 'line-width':1.4, 'line-dasharray':[2,2],
+                'line-opacity':['coalesce',['get','o'],0.6] } });
+
+      map.addSource('drafting', { type:'geojson', data:fc([]) });
+      map.addLayer({ id:'draft-line', type:'line', source:'drafting',
+        paint:{ 'line-color':['get','color'], 'line-width':3, 'line-dasharray':[2,1.5] } });
+
+      drawMap();
+
+      var wasTree = map.getZoom() >= 14.5;
+      map.on('zoomend', function(){
+        var isTree = map.getZoom() >= 14.5;
+        if (isTree !== wasTree){ wasTree = isTree; drawMap(); }
+      });
+    });
+  }
+
+  function fc(f){ return { type:'FeatureCollection', features:f }; }
+  function clearMarkers(){ markers.forEach(function(m){ m.remove(); }); markers = []; }
+
+  function addMarker(lngLat, cls, title, onClick, pulse){
+    var el = document.createElement('div');
+    el.className = 'mk ' + cls + (pulse ? ' pulse' : '');
+    if (title) el.title = title;
+    var m = new maplibregl.Marker({ element:el }).setLngLat(lngLat).addTo(map);
+    if (onClick) el.addEventListener('click', function(e){ e.stopPropagation(); onClick(); });
+    markers.push(m);
+    return m;
+  }
+
+  function drawMap(){
+    if (!ready) return;
+    if (!idx) idx = buildIndex();
+    clearMarkers();
+    if (popup){ popup.remove(); popup = null; }
+
+    idx = buildIndex();
+    var runs = [];
+
+    data.locations.forEach(function(loc){
+      var at = sitePos(loc);
+      var locSel = sel.loc && sel.loc.id === loc.id;
+
+      var olts = oltsOf(loc);
+      var anyPort = olts.some(function(o){ return portsOf(o).length > 0; });
+
+      // Shape and colour report how far this office is set up.
+      var cls = olts.length === 0 ? 'mk-loc' : (anyPort ? 'mk-port' : 'mk-olt');
+      var stage = olts.length === 0 ? 'office only'
+                : (anyPort ? olts.length + ' OLT, ports added' : olts.length + ' OLT, no ports');
+
+      addMarker(at, cls + (locSel ? '' : ' dim'), loc.name + ' — ' + stage,
+                function(){ siteClick(loc, at); }, locSel);
+
+      // Every run for this office starts at that same point.
+      olts.forEach(function(o){
+        portsOf(o).forEach(function(p){
+          var live = locSel && sel.olt && sel.olt.id === o.id &&
+                     sel.port && sel.port.id === p.id;
+
+          objsOf(p).forEach(function(ob){
+            var from = ob.parentId ? endOf(ob.parentId) : at;
+            var to = [parseFloat(ob.lng), parseFloat(ob.lat)];
+            if (!from || isNaN(to[0]) || isNaN(to[1])) return;
+
+            var t = TYPES[ob.type] || TYPES.FIBRE;
+            runs.push({ type:'Feature',
+                        properties:{ color:t.color, o: live ? 1 : 0.28, w: live ? 3.4 : 2 },
+                        geometry:{ type:'LineString', coordinates:[from, to] } });
+
+            addMarker(to, t.cls + (live ? '' : ' dim'), t.label,
+                      function(){ objectPopup(ob, to); });
+          });
+        });
+      });
+    });
+
+    map.getSource('runs').setData(fc(runs));
+    map.getSource('spurs').setData(fc([]));
+    $('legend').style.display = data.locations.length ? '' : 'none';
+    $('zoomhint').classList.remove('on');
+  }
+
+  /** Clicking the office marker: open it, or offer to draw if we are on the map step. */
+  function siteClick(loc, at){
+    if (screen === 'map' && sel.loc && sel.loc.id === loc.id && sel.port){
+      sitePopup(loc, at);
+      return;
+    }
+    openLocation(loc);
+  }
+
+  /* ---------------- popups ---------------- */
+
+  function popAt(lngLat, node){
+    if (popup) popup.remove();
+    popup = new maplibregl.Popup({ offset:16, closeButton:true, maxWidth:'270px' })
+      .setLngLat(lngLat).setDOMContent(node).addTo(map);
+  }
+
+  /** One popup for the office point — it holds the OLT and port for that site. */
+  function sitePopup(loc, at){
+    var olts = oltsOf(loc);
+    var box = document.createElement('div');
+    box.className = 'pop';
+
+    box.innerHTML =
+      '<h4><span class="mk-port" style="width:10px;height:10px;border-width:2px"></span>' +
+      esc(loc.name) + '</h4>' +
+      '<div class="meta"><b>OLTs here</b> ' + olts.length + '<br>' +
+      '<b>Position</b> ' + parseFloat(loc.lat).toFixed(6) + ', ' + parseFloat(loc.lng).toFixed(6) +
+      '</div>' +
+      '<hr><div class="lbl">OLT</div><div class="chips olts"></div>' +
+      '<hr><div class="lbl">Port</div><div class="chips ports"></div>' +
+      '<hr><div class="lbl">Draw from this port</div><div class="types"></div>';
+
+    var oWrap = box.querySelector('.olts');
+    olts.forEach(function(o){
+      var c = document.createElement('button');
+      c.className = 'chip' + (sel.olt && sel.olt.id === o.id ? ' on' : '');
+      c.textContent = o.name;
+      c.onclick = function(){
+        sel.olt = o; sel.port = portsOf(o)[0] || null;
+        render(); drawMap(); sitePopup(loc, at);
+      };
+      oWrap.appendChild(c);
+    });
+
+    var pWrap = box.querySelector('.ports');
+    if (sel.olt){
+      portsOf(sel.olt).forEach(function(p){
+        var c = document.createElement('button');
+        c.className = 'chip' + (sel.port && sel.port.id === p.id ? ' on' : '');
+        c.textContent = p.name;
+        c.onclick = function(){ sel.port = p; render(); drawMap(); sitePopup(loc, at); };
+        pWrap.appendChild(c);
+      });
+    }
+    if (!pWrap.children.length){
+      pWrap.innerHTML = '<span style="font-size:11.5px;color:#5F6368">No ports yet</span>';
+    }
+
+    var tWrap = box.querySelector('.types');
+    if (sel.port){
+      typeButtons(tWrap, function(t){
+        if (popup) popup.remove();
+        startDraft(t, at, '');
+      });
+    } else {
+      tWrap.innerHTML = '<span style="font-size:11.5px;color:#5F6368">Add a port first</span>';
+    }
+
+    popAt(at, box);
+  }
+
+  function objectPopup(ob, at){
+    var t = TYPES[ob.type] || TYPES.FIBRE;
+    var own = idx.ownerOfPort[ob.portId] || { loc:sel.loc, olt:sel.olt };
+    var port = data.ports.filter(function(p){ return p.id === ob.portId; })[0];
+
+    // Work on whatever was clicked, even if it belongs to another port.
+    if (port && (!sel.port || sel.port.id !== port.id)){
+      sel.loc = own.loc; sel.olt = own.olt; sel.port = port;
+      render(); drawMap();
+    }
+
+    var from = ob.parentId ? endOf(ob.parentId) : (own.loc ? sitePos(own.loc) : null);
+    var d = from ? metres(from[1], from[0], parseFloat(ob.lat), parseFloat(ob.lng)) : null;
+    var parent = ob.parentId
+      ? (data.objects.filter(function(x){ return x.id === ob.parentId; })[0] || null) : null;
+
+    var box = document.createElement('div');
+    box.className = 'pop';
+    box.innerHTML =
+      '<h4><span class="' + t.cls + '" style="width:10px;height:10px"></span>' + t.label + '</h4>' +
+      '<div class="meta">' +
+        '<b>Location</b> ' + esc(own.loc ? own.loc.name : '') + '<br>' +
+        '<b>OLT</b> ' + esc(own.olt ? own.olt.name : '') + '<br>' +
+        '<b>Port</b> ' + esc(port ? port.name : '') + '<br>' +
+        '<b>Runs from</b> ' + (parent ? esc((TYPES[parent.type]||{}).label || parent.type) : esc(port ? port.name : '')) + '<br>' +
+        (d !== null ? '<b>Length</b> ' + fmtM(d) + '<br>' : '') +
+        '<b>Position</b> ' + parseFloat(ob.lat).toFixed(6) + ', ' + parseFloat(ob.lng).toFixed(6) +
+      '</div>' +
+      '<hr><div class="lbl">Continue from here</div><div class="types"></div>' +
+      '<hr><button class="btn" style="width:100%;color:#D93025">Delete this object</button>';
+
+    typeButtons(box.querySelector('.types'), function(type){
+      if (popup) popup.remove();
+      startDraft(type, at, ob.id);
+    });
+
+    box.querySelector('.btn').onclick = function(){
+      if (!confirm('Delete this ' + t.label + ' and anything chained after it?')) return;
+      post('remove', { tab:'objects', id:ob.id })
+        .then(function(){ if (popup) popup.remove(); return load(); })
+        .then(function(){ toast('Deleted'); })
+        .catch(function(e){ toast(e.message); });
+    };
+    popAt(at, box);
+  }
+
+  function typeButtons(wrap, onPick){
+    Object.keys(TYPES).forEach(function(k){
+      var b = document.createElement('button');
+      b.className = 't';
+      b.textContent = TYPES[k].label;
+      b.style.borderColor = TYPES[k].color;
+      b.style.color = TYPES[k].color;
+      b.onmouseenter = function(){ b.style.background = TYPES[k].color; b.style.color = '#fff'; };
+      b.onmouseleave = function(){ b.style.background = '#fff'; b.style.color = TYPES[k].color; };
+      b.onclick = function(){ onPick(k); };
+      wrap.appendChild(b);
+    });
+  }
+
+  /* ---------------- drawing ---------------- */
+
+  function startDraft(type, fromLngLat, parentId){
+    clearDraft();
+    draft = { type:type, from:fromLngLat, to:offset(fromLngLat[1], fromLngLat[0], 60, 45),
+              parentId: parentId || '' };
+
+    var el = document.createElement('div');
+    el.className = 'mk-drag';
+    el.style.background = TYPES[type].color;
+
+    dragMarker = new maplibregl.Marker({ element:el, draggable:true })
+      .setLngLat(draft.to).addTo(map);
+    dragMarker.on('drag', function(){
+      var p = dragMarker.getLngLat(); draft.to = [p.lng, p.lat]; paintDraft(); draftPanel();
+    });
+    dragMarker.on('dragend', function(){ paintDraft(); draftPanel(); });
+
+    if (map.getZoom() < 16) map.easeTo({ center:fromLngLat, zoom:17, duration:500 });
+    paintDraft(); draftPanel();
+    toast('Drag the handle to place the ' + TYPES[type].label);
+  }
+
+  function paintDraft(){
+    if (!ready) return;
+    map.getSource('drafting').setData(draft ? fc([{
+      type:'Feature', properties:{ color:TYPES[draft.type].color },
+      geometry:{ type:'LineString', coordinates:[draft.from, draft.to] }
+    }]) : fc([]));
+  }
+
+  function draftPanel(){
+    var p = $('draft');
+    if (!draft){ p.classList.remove('on'); return; }
+
+    var d = metres(draft.from[1], draft.from[0], draft.to[1], draft.to[0]);
+    var parent = draft.parentId
+      ? (data.objects.filter(function(x){ return x.id === draft.parentId; })[0] || null) : null;
+
+    p.classList.add('on');
+    p.innerHTML =
+      '<h4 style="color:' + TYPES[draft.type].color + '">Placing ' + TYPES[draft.type].label + '</h4>' +
+      '<p>' + esc(sel.loc.name) + '</p>' +
+      '<p>' + esc(sel.olt.name) + ' · ' + esc(sel.port.name) + '</p>' +
+      '<p>From <b>' + (parent ? esc((TYPES[parent.type]||{}).label) : esc(sel.port.name)) + '</b></p>' +
+      '<p>Length <b>' + fmtM(d) + '</b></p>' +
+      '<div class="acts"><button class="btn" id="dx">Cancel</button>' +
+      '<button class="btn primary" id="dok">Confirm</button></div>';
+
+    $('dx').onclick = clearDraft;
+    $('dok').onclick = function(){
+      var b = this; b.disabled = true; b.textContent = 'Saving…';
+      post('addObject', { row:{
+        portId: sel.port.id, parentId: draft.parentId, type: draft.type,
+        label: TYPES[draft.type].label,
+        lat: draft.to[1], lng: draft.to[0],
+        fromLat: draft.from[1], fromLng: draft.from[0]
+      }})
+      .then(function(){ clearDraft(); return load(); })
+      .then(function(){ toast('Saved'); })
+      .catch(function(e){ b.disabled = false; b.textContent = 'Confirm'; toast(e.message); });
+    };
+  }
+
+  function clearDraft(){
+    draft = null;
+    if (dragMarker){ dragMarker.remove(); dragMarker = null; }
+    $('draft').classList.remove('on');
+    paintDraft();
+  }
+
+  /* ---------------- screens ---------------- */
+
+  function ctx(){
+    var c = $('ctx');
+    if (screen === 'search' || screen === 'manual'){
+      c.innerHTML = '<div class="ctx__row"><span class="ctx__k">Step</span>' +
+                    '<span class="ctx__v">Adding a new office location</span></div>';
+      return;
+    }
+    c.innerHTML =
+      '<div class="ctx__row"><span class="ctx__k">Location</span><span class="ctx__v' +
+        (sel.loc?'':' none') + '">' + (sel.loc ? esc(sel.loc.name) : 'none selected') + '</span></div>' +
+      '<div class="ctx__row"><span class="ctx__k">OLT</span><span class="ctx__v' +
+        (sel.olt?'':' none') + '">' + (sel.olt ? esc(sel.olt.name) : 'none selected') + '</span></div>' +
+      '<div class="ctx__row"><span class="ctx__k">Port</span><span class="ctx__v' +
+        (sel.port?'':' none') + '">' + (sel.port ? esc(sel.port.name) : 'none selected') + '</span></div>';
+  }
+
+  function render(){
+    ctx();
+    var b = $('body'), f = $('foot');
+    b.innerHTML = ''; f.innerHTML = '';
+    $('fab').classList.toggle('off', screen !== 'home');
+
+    if (!configured()){
+      b.innerHTML = '<p class="lead">Backend not connected. Paste the planner web app URL into ' +
+                    '<b>API_URL</b> at the top of this file.</p>';
+      return;
+    }
+    if (screen === 'home')   return homeScreen(b);
+    if (screen === 'search') return searchScreen(b, f);
+    if (screen === 'manual') return manualScreen(b, f);
+    if (screen === 'olt')    return oltScreen(b, f);
+    if (screen === 'port')   return portScreen(b, f);
+    if (screen === 'map')    return mapScreen(b, f);
+  }
+
+  function homeScreen(b){
+    b.innerHTML = '<h2 class="title">Your network</h2>' +
+      '<p class="lead">Pick a location to see its OLTs, ports and runs. ' +
+      'Every location is marked on the map.</p>';
+
+    if (!data.locations.length){
+      var e = document.createElement('div');
+      e.className = 'empty';
+      e.innerHTML = 'Nothing added yet.<br>Use <b>Add Location</b> to start.';
+      b.appendChild(e);
+      return;
+    }
+
+    data.locations.forEach(function(l){
+      var nO = oltsOf(l).length;
+      var nP = oltsOf(l).reduce(function(a,o){ return a + portsOf(o).length; }, 0);
+      var r = document.createElement('div');
+      r.className = 'row';
+      r.innerHTML = '<span class="mk-loc"></span><span class="row__main"><b>' + esc(l.name) + '</b>' +
+        '<span>' + nO + ' OLT · ' + nP + ' port' + (nP===1?'':'s') + '</span></span>' +
+        '<button class="del" title="Delete location">&times;</button>';
+      r.querySelector('.row__main').onclick = function(){ openLocation(l); };
+      r.querySelector('.del').onclick = function(e){
+        e.stopPropagation();
+        if (!confirm('Delete "' + l.name + '" with all its OLTs, ports and objects?')) return;
+        post('remove', { tab:'locations', id:l.id })
+          .then(function(){
+            if (sel.loc && sel.loc.id === l.id){ sel.loc=null; sel.olt=null; sel.port=null; }
+            return load();
+          })
+          .then(function(){ toast('Location deleted'); })
+          .catch(function(e){ toast(e.message); });
+      };
+      b.appendChild(r);
+    });
+  }
+
+  function openLocation(l){
+    sel.loc = l; sel.olt = null; sel.port = null;
+    reselect();
+    screen = 'olt';
+    render(); drawMap();
+    map.easeTo({ center:[parseFloat(l.lng), parseFloat(l.lat)], zoom:17.2, duration:700 });
+  }
+
+  /* Step 2 — OLTs */
+  function oltScreen(b, f){
+    var mine = oltsOf(sel.loc);
+
+    b.innerHTML =
+      '<div class="stepbar"><span>Step 2 of 4</span><span>OLTs</span></div>' +
+      '<h2 class="title">' + esc(sel.loc.name) + '</h2>' +
+      '<p class="lead">Add the OLTs inside this office. They are numbered for you. ' +
+      'Select one, then continue.</p>';
+
+    var add = document.createElement('button');
+    add.className = 'btn primary wide'; add.textContent = '+ Add OLT';
+    add.onclick = function(){
+      add.disabled = true; add.textContent = 'Adding…';
+      post('addOlt', { row:{ locationId: sel.loc.id } })
+        .then(function(res){ return load().then(function(){
+          sel.olt = data.olts.filter(function(o){ return o.id === res.row.id; })[0] || sel.olt;
+          sel.port = sel.olt ? (portsOf(sel.olt)[0] || null) : null;
+          render(); drawMap(); toast(res.row.name + ' added');
+        }); })
+        .catch(function(e){ add.disabled = false; add.textContent = '+ Add OLT'; toast(e.message); });
+    };
+    b.appendChild(add);
+
+    if (!mine.length){
+      var e = document.createElement('div');
+      e.className = 'empty'; e.style.marginTop = '14px';
+      e.innerHTML = 'No OLT here yet.<br>Add the first one to continue.';
+      b.appendChild(e);
+    } else {
+      var h = document.createElement('div');
+      h.className = 'sec'; h.innerHTML = '<span>OLTs at this office</span><span>' + mine.length + '</span>';
+      b.appendChild(h);
+
+      mine.forEach(function(o){
+        var np = portsOf(o).length;
+        var r = document.createElement('div');
+        r.className = 'row' + (sel.olt && sel.olt.id === o.id ? ' sel' : '');
+        r.innerHTML = '<span class="mk-olt" style="width:12px;height:12px;border-width:2px"></span>' +
+          '<span class="row__main"><b>' + esc(o.name) + '</b><span>' + np +
+          ' port' + (np===1?'':'s') + '</span></span><button class="del">&times;</button>';
+        r.querySelector('.row__main').onclick = function(){
+          sel.olt = o; sel.port = portsOf(o)[0] || null; render(); drawMap();
+        };
+        r.querySelector('.del').onclick = function(e){
+          e.stopPropagation();
+          if (!confirm('Delete ' + o.name + ' with its ports and objects?')) return;
+          post('remove', { tab:'olts', id:o.id })
+            .then(function(){ return load(); })
+            .then(function(){ toast(o.name + ' deleted'); })
+            .catch(function(e){ toast(e.message); });
+        };
+        b.appendChild(r);
+      });
+    }
+
+    stepFoot(f, function(){ screen = 'home'; render(); drawMap(); fitAll(); },
+             'Next: Ports', !!sel.olt, function(){ screen = 'port'; render(); });
+  }
+
+  /* Step 3 — Ports */
+  function portScreen(b, f){
+    var mine = portsOf(sel.olt);
+
+    b.innerHTML =
+      '<div class="stepbar"><span>Step 3 of 4</span><span>Ports</span></div>' +
+      '<h2 class="title">' + esc(sel.olt.name) + '</h2>' +
+      '<p class="lead">Add the ports on this OLT, then select the one you want to draw from.</p>';
+
+    var add = document.createElement('button');
+    add.className = 'btn primary wide'; add.textContent = '+ Add Port';
+    add.onclick = function(){
+      add.disabled = true; add.textContent = 'Adding…';
+      post('addPort', { row:{ oltId: sel.olt.id } })
+        .then(function(res){ return load().then(function(){
+          sel.port = data.ports.filter(function(p){ return p.id === res.row.id; })[0] || sel.port;
+          render(); drawMap(); toast(res.row.name + ' added');
+        }); })
+        .catch(function(e){ add.disabled = false; add.textContent = '+ Add Port'; toast(e.message); });
+    };
+    b.appendChild(add);
+
+    if (!mine.length){
+      var e = document.createElement('div');
+      e.className = 'empty'; e.style.marginTop = '14px';
+      e.innerHTML = 'No ports on ' + esc(sel.olt.name) + ' yet.';
+      b.appendChild(e);
+    } else {
+      var h = document.createElement('div');
+      h.className = 'sec';
+      h.innerHTML = '<span>Ports on ' + esc(sel.olt.name) + '</span><span>' + mine.length + '</span>';
+      b.appendChild(h);
+
+      mine.forEach(function(p){
+        var n = objsOf(p).length;
+        var r = document.createElement('div');
+        r.className = 'row' + (sel.port && sel.port.id === p.id ? ' sel' : '');
+        r.innerHTML = '<span class="mk-port" style="width:11px;height:11px;border-width:2px"></span>' +
+          '<span class="row__main"><b>' + esc(p.name) + '</b><span>' + n +
+          ' object' + (n===1?'':'s') + '</span></span><button class="del">&times;</button>';
+        r.querySelector('.row__main').onclick = function(){ sel.port = p; render(); drawMap(); };
+        r.querySelector('.del').onclick = function(e){
+          e.stopPropagation();
+          if (!confirm('Delete ' + p.name + ' and its objects?')) return;
+          post('remove', { tab:'ports', id:p.id })
+            .then(function(){ return load(); })
+            .then(function(){ toast(p.name + ' deleted'); })
+            .catch(function(e){ toast(e.message); });
+        };
+        b.appendChild(r);
+      });
+    }
+
+    stepFoot(f, function(){ screen = 'olt'; render(); },
+             'Next: Draw', !!sel.port, function(){
+               screen = 'map'; render(); drawMap();
+               map.easeTo({ center:sitePos(sel.loc), zoom:17.5, duration:600 });
+             });
+  }
+
+  /* Step 4 — objects on the map */
+  function mapScreen(b, f){
+    var objs = objsOf(sel.port);
+
+    b.innerHTML =
+      '<div class="stepbar"><span>Step 4 of 4</span><span>Objects</span></div>' +
+      '<h2 class="title">' + esc(sel.olt.name) + ' · ' + esc(sel.port.name) + '</h2>' +
+      '<p class="lead">Click the <b>blue diamond</b> at the office on the map, choose a type, ' +
+      'then drag the handle to where the object sits. Click any object afterwards to ' +
+      'continue the run from it.</p>';
+
+    if (!objs.length){
+      var e = document.createElement('div');
+      e.className = 'empty';
+      e.innerHTML = 'Nothing drawn on ' + esc(sel.port.name) + ' yet.';
+      b.appendChild(e);
+    } else {
+      var h = document.createElement('div');
+      h.className = 'sec';
+      h.innerHTML = '<span>Objects on ' + esc(sel.port.name) + '</span><span>' + objs.length + '</span>';
+      b.appendChild(h);
+
+      objs.forEach(function(o){
+        var t = TYPES[o.type] || TYPES.FIBRE;
+        var from = o.parentId ? endOf(o.parentId) : sitePos(sel.loc);
+        var d = from ? metres(from[1], from[0], parseFloat(o.lat), parseFloat(o.lng)) : null;
+        var parent = o.parentId
+          ? (data.objects.filter(function(x){ return x.id === o.parentId; })[0] || null) : null;
+
+        var r = document.createElement('div');
+        r.className = 'row';
+        r.innerHTML = '<span class="' + t.cls + '"></span><span class="row__main"><b>' + t.label +
+          '</b><span>from ' + (parent ? esc((TYPES[parent.type]||{}).label) : esc(sel.port.name)) +
+          (d !== null ? ' · ' + fmtM(d) : '') + '</span></span><button class="del">&times;</button>';
+        r.querySelector('.row__main').onclick = function(){
+          var at = [parseFloat(o.lng), parseFloat(o.lat)];
+          map.easeTo({ center:at, zoom:18.5, duration:500 });
+          objectPopup(o, at);
+        };
+        r.querySelector('.del').onclick = function(e){
+          e.stopPropagation();
+          if (!confirm('Delete this ' + t.label + ' and anything chained after it?')) return;
+          post('remove', { tab:'objects', id:o.id })
+            .then(function(){ return load(); })
+            .then(function(){ toast('Deleted'); })
+            .catch(function(e){ toast(e.message); });
+        };
+        b.appendChild(r);
+      });
+    }
+
+    var back = document.createElement('button');
+    back.className = 'btn'; back.textContent = '← Ports';
+    back.onclick = function(){ clearDraft(); screen = 'port'; render(); };
+
+    var draw = document.createElement('button');
+    draw.className = 'btn primary'; draw.textContent = 'Draw object';
+    draw.onclick = function(){ sitePopup(sel.loc, sitePos(sel.loc)); };
+
+    f.appendChild(back); f.appendChild(draw);
+  }
+
+  /** Back on the left, Next on the right — same place on every step. */
+  function stepFoot(f, onBack, nextLabel, nextOn, onNext){
+    var back = document.createElement('button');
+    back.className = 'btn'; back.textContent = '← Back';
+    back.onclick = onBack;
+
+    var next = document.createElement('button');
+    next.className = 'btn primary'; next.textContent = nextLabel;
+    next.disabled = !nextOn;
+    next.title = nextOn ? '' : 'Select one first';
+    next.onclick = onNext;
+
+    f.appendChild(back); f.appendChild(next);
+  }
+
+  function backButton(f){
+    var back = document.createElement('button');
+    back.className = 'btn'; back.textContent = '\u2190 All locations';
+    back.onclick = function(){
+      clearDraft();
+      sel.loc = null; sel.olt = null; sel.port = null;
+      screen = 'home'; render(); drawMap(); fitAll();
+    };
+    f.appendChild(back);
+  }
+
+  function fitAll(){
+    if (!ready || !data.locations.length) return;
+    var b = new maplibregl.LngLatBounds();
+    data.locations.forEach(function(l){ b.extend([parseFloat(l.lng), parseFloat(l.lat)]); });
+    map.fitBounds(b, { padding:80, maxZoom:14, duration:600 });
+  }
+
+  /* ---------------- add location ---------------- */
+
+  var sTimer = null, lastQ = '';
+
+  function searchScreen(b, f){
+    b.innerHTML =
+      '<div class="stepbar"><span>Step 1 of 4</span><span>Location</span></div>' +
+      '<h2 class="title">Add a location</h2>' +
+      '<p class="lead">Search for the place. Small shops are often not on the map — ' +
+      'if nothing matches, use <b>Add Location Manually</b> with the Google link.</p>' +
+      '<div class="searchbox"><input id="q" placeholder="Search a place or address" autocomplete="off">' +
+      '<div class="spin" id="spin"></div></div><div class="hits" id="hits"></div>';
+
+    var back = document.createElement('button');
+    back.className = 'btn'; back.textContent = 'Cancel';
+    back.onclick = function(){ screen = 'home'; render(); };
+
+    var man = document.createElement('button');
+    man.className = 'btn'; man.textContent = 'Add Location Manually';
+    man.onclick = function(){ screen = 'manual'; render(); };
+
+    f.appendChild(back); f.appendChild(man);
+
+    var i = $('q'); i.focus();
+    i.addEventListener('input', function(){
+      clearTimeout(sTimer);
+      var v = i.value.trim();
+      sTimer = setTimeout(function(){ doSearch(v); }, 260);
+    });
+  }
+
+  function doSearch(q){
+    if (q.length < 3){ $('hits').classList.remove('on'); return; }
+    lastQ = q; $('spin').classList.add('on');
+
+    fetch('https://photon.komoot.io/api/?limit=8&lang=en&q=' + encodeURIComponent(q) +
+          '&lat=' + CONFIG.SEARCH_NEAR.lat + '&lon=' + CONFIG.SEARCH_NEAR.lon)
+      .then(function(r){ return r.json(); })
+      .then(function(res){
+        if (q !== lastQ) return;
+        $('spin').classList.remove('on');
+        var box = $('hits');
+        var feats = (res.features || []).filter(function(f){ return f.geometry; });
+        box.classList.add('on');
+
+        if (!feats.length){
+          box.innerHTML = '<div class="hit"><b>No match</b><span>Try fewer words, or add it ' +
+                          'manually with the Google link.</span></div>';
+          return;
+        }
+        box.innerHTML = feats.map(function(f, i){
+          var p = f.properties || {};
+          var bits = [p.street, p.district, p.city, p.state].filter(Boolean);
+          return '<div class="hit" data-i="' + i + '"><b>' + esc(p.name || p.street || 'Unnamed') +
+                 '</b><span>' + esc(bits.join(', ')) + '</span></div>';
+        }).join('');
+
+        Array.prototype.forEach.call(box.querySelectorAll('.hit'), function(el){
+          el.onclick = function(){
+            var f = feats[+el.dataset.i]; if (!f) return;
+            var p = f.properties || {};
+            saveLocation({
+              name: p.name || p.street || 'Unnamed',
+              address: [p.street, p.district, p.city, p.state].filter(Boolean).join(', '),
+              link: '', lat: f.geometry.coordinates[1], lng: f.geometry.coordinates[0]
+            }, function(m){ toast(m); });
+          };
+        });
+      })
+      .catch(function(){
+        $('spin').classList.remove('on');
+        $('hits').classList.add('on');
+        $('hits').innerHTML = '<div class="hit"><b>Search unavailable</b>' +
+                              '<span>Add the location manually instead.</span></div>';
+      });
+  }
+
+  function manualScreen(b, f){
+    b.innerHTML =
+      '<div class="stepbar"><span>Step 1 of 4</span><span>Location</span></div>' +
+      '<h2 class="title">Add manually</h2>' +
+      '<p class="lead">Office address and Google link are required. Leave the coordinates ' +
+      'blank and they will be read from the link.</p>' +
+      '<div class="field"><label>Office address <i>*</i></label>' +
+      '<input id="f_addr" placeholder="Shop 4, Lohegaon Road, Pune"></div>' +
+      '<div class="field"><label>Google link <i>*</i></label>' +
+      '<input id="f_link" placeholder="https://maps.app.goo.gl/..."></div>' +
+      '<div class="two"><div class="field"><label>Latitude</label>' +
+      '<input id="f_lat" placeholder="optional"></div>' +
+      '<div class="field"><label>Longitude</label><input id="f_lng" placeholder="optional"></div></div>' +
+      '<div class="msg" id="f_msg"></div>';
+
+    var back = document.createElement('button');
+    back.className = 'btn'; back.textContent = 'Back';
+    back.onclick = function(){ screen = 'search'; render(); };
+
+    var save = document.createElement('button');
+    save.className = 'btn primary'; save.textContent = 'Save location';
+    save.onclick = function(){
+      var a = $('f_addr'), l = $('f_link'), m = $('f_msg');
+      a.classList.remove('bad'); l.classList.remove('bad');
+      m.className = 'msg'; m.textContent = '';
+
+      if (!a.value.trim()){
+        a.classList.add('bad'); a.focus();
+        m.className='msg bad'; m.textContent='Office address is required.'; return;
+      }
+      if (!l.value.trim()){
+        l.classList.add('bad'); l.focus();
+        m.className='msg bad'; m.textContent='Google link is required.'; return;
+      }
+
+      save.disabled = true; save.textContent = 'Saving…';
+      m.textContent = 'Reading the link…';
+
+      saveLocation({
+        name: a.value.trim(), address: a.value.trim(), link: l.value.trim(),
+        lat: $('f_lat').value.trim(), lng: $('f_lng').value.trim()
+      }, function(err){
+        save.disabled = false; save.textContent = 'Save location';
+        m.className = 'msg bad'; m.textContent = err;
+      });
+    };
+
+    f.appendChild(back); f.appendChild(save);
+  }
+
+  function saveLocation(row, onErr){
+    post('addLocation', { row:row })
+      .then(function(res){
+        return load().then(function(){
+          var made = data.locations.filter(function(l){ return l.id === res.row.id; })[0];
+          if (made) openLocation(made);
+          toast('Location added — now add an OLT');
+        });
+      })
+      .catch(function(e){ onErr(e.message); });
+  }
+
+  /* ---------------- unlock ---------------- */
+
+  function unlock(){
+    var k = $('gateKey').value.trim();
+    var msg = $('gateMsg'), btn = $('gateGo');
+
+    if (!k){
+      $('gateKey').classList.add('bad');
+      msg.className = 'msg bad'; msg.textContent = 'Enter the key to continue.';
+      return;
+    }
+    if (!configured()){
+      msg.className = 'msg bad'; msg.textContent = 'Backend URL is not set in this file.';
+      return;
+    }
+
+    btn.disabled = true; btn.textContent = 'Checking…';
+    msg.className = 'msg'; msg.textContent = '';
+    editKey = k;
+
+    // The backend checks the key before it looks at the table name, so an
+    // "Unknown table" reply proves the key was accepted. Nothing is changed.
+    post('remove', { tab:'__keycheck__', id:'0' })
+      .then(pass)
+      .catch(function(e){
+        if (String(e.message).indexOf('Unknown table') > -1) return pass();
+        btn.disabled = false; btn.textContent = 'Continue';
+        $('gateKey').classList.add('bad');
+        msg.className = 'msg bad';
+        msg.textContent = String(e.message).indexOf('Wrong') > -1
+          ? 'That key is not right.' : e.message;
+      });
+  }
+
+  function pass(){
+    try{ sessionStorage.setItem('np_key', editKey); }catch(e){}
+    $('gate').classList.add('off');
+    render();
+    load().then(fitAll).catch(function(e){ toast('Cannot load: ' + e.message); });
+  }
+
+  /* ---------------- start ---------------- */
+
+  $('gateLogo').src = LOGO;
+  $('brandLogo').src = LOGO;
+
+  initMap();
+  render();
+
+  $('gateGo').onclick = unlock;
+  $('gateKey').addEventListener('keydown', function(e){
+    $('gateKey').classList.remove('bad');
+    if (e.key === 'Enter') unlock();
+  });
+  $('gateKey').focus();
+
+  $('fab').onclick = function(){ clearDraft(); screen = 'search'; render(); };
+
+  window.addEventListener('resize', function(){ if (map) map.resize(); });
+
+})();
+</script>
+</body>
+</html>
