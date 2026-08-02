@@ -43,24 +43,6 @@ var CONFIG = {
 
   #map{ position:fixed; top:0; bottom:0; right:0; left:var(--side); background:#E8EAED; }
 
-  .gate{
-    position:fixed; inset:0; z-index:2000; background:#fff;
-    display:flex; align-items:center; justify-content:center; padding:20px;
-  }
-  .gate.off{ display:none; }
-  .gate__card{ width:100%; max-width:340px; text-align:center; }
-  .gate__logo{ height:52px; margin-bottom:22px; }
-  .gate h1{ font-size:19px; font-weight:600; margin:0 0 6px; }
-  .gate p{ font-size:13px; color:var(--grey); margin:0 0 22px; line-height:1.55; }
-  .gate input{
-    width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:9px;
-    font-size:15px; outline:none; text-align:center;
-  }
-  .gate input:focus{ border-color:var(--olt); box-shadow:0 0 0 1px var(--olt); }
-  .gate input.bad{ border-color:var(--red); }
-  .gate .msg{ font-size:12.5px; margin-top:10px; min-height:18px; }
-  .gate .msg.bad{ color:var(--red); }
-
   .side{
     position:fixed; top:0; bottom:0; left:0; width:var(--side);
     border-right:1px solid var(--line); display:flex; flex-direction:column;
@@ -527,18 +509,6 @@ var CONFIG = {
 
 <body>
 
-<div class="gate" id="gate">
-  <div class="gate__card">
-    <img class="gate__logo" id="gateLogo" alt="SCC">
-    <h1>Network Planner</h1>
-    <div style="font-size:11px;color:#5F6368;margin-top:-2px">Build v25</div>
-    <p>Enter the edit key to continue.</p>
-    <input id="gateKey" type="password" placeholder="Edit key" autocomplete="current-password">
-    <div class="msg" id="gateMsg"></div>
-    <button class="btn primary wide" id="gateGo" style="margin-top:14px">Continue</button>
-  </div>
-</div>
-
 <div id="map"></div>
 
 <aside class="side">
@@ -546,7 +516,7 @@ var CONFIG = {
   <div class="brandbar">
     <img id="brandLogo" alt="SCC">
     <b>Network Planner</b>
-    <span style="margin-left:auto;font-size:10.5px;color:#5F6368">v25</span>
+    <span style="margin-left:auto;font-size:10.5px;color:#5F6368">v27</span>
   </div>
   <div class="ctx" id="ctx"></div>
   <div class="loadbar off" id="loading"></div>
@@ -2245,43 +2215,15 @@ var CONFIG = {
       .catch(function(e){ onErr(e.message); });
   }
 
-  /* ---------------- unlock ---------------- */
+  /* ---------------- start ---------------- */
 
-  function unlock(){
-    var k = $('gateKey').value.trim();
-    var msg = $('gateMsg'), btn = $('gateGo');
-
-    if (!k){
-      $('gateKey').classList.add('bad');
-      msg.className = 'msg bad'; msg.textContent = 'Enter the key to continue.';
-      return;
-    }
-    if (!configured()){
-      msg.className = 'msg bad'; msg.textContent = 'Backend URL is not set in this file.';
-      return;
-    }
-
-    btn.disabled = true; btn.textContent = 'Checking…';
-    msg.className = 'msg'; msg.textContent = '';
-    editKey = k;
-
-    // The backend checks the key before it looks at the table name, so an
-    // "Unknown table" reply proves the key was accepted. Nothing is changed.
-    post('remove', { tab:'__keycheck__', id:'0' })
-      .then(pass)
-      .catch(function(e){
-        if (String(e.message).indexOf('Unknown table') > -1) return pass();
-        btn.disabled = false; btn.textContent = 'Continue';
-        $('gateKey').classList.add('bad');
-        msg.className = 'msg bad';
-        msg.textContent = String(e.message).indexOf('Wrong') > -1
-          ? 'That key is not right.' : e.message;
-      });
-  }
-
-  function pass(){
-    try{ sessionStorage.setItem('np_key', editKey); }catch(e){}
-    $('gate').classList.add('off');
+  /**
+   * No sign-in screen. The link itself is the access control — it is not
+   * shared outside the business. The key still travels with every save so
+   * the backend keeps rejecting writes from anywhere else.
+   */
+  function start(){
+    editKey = CONFIG.EDIT_KEY;
     render();
     load().then(fitAll).catch(function(e){ toast('Cannot load: ' + e.message); });
   }
@@ -2329,17 +2271,11 @@ var CONFIG = {
 
   /* ---------------- start ---------------- */
 
-  $('gateLogo').src = LOGO;
   $('brandLogo').src = LOGO;
 
   initMap();
   initSheet();
-  render();
-
-  // Apps Script containers sleep. Wake it while the key is being typed.
-  if (configured()) fetch(api() + '?action=ping&cb=' + Date.now()).catch(function(){});
-
-  $('gateGo').onclick = unlock;
+  start();
 
   $('fab').onclick = function(){ clearDraft(); screen = 'search'; render(); };
 
