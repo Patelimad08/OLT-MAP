@@ -1,0 +1,3226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SCC Network Map</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --side:430px;
+    --line:#DADCE0;
+    --line2:#EDEFF1;
+    --grey:#5F6368;
+    --blue:#1A73E8;
+    --ink:#202124;
+    --ok:#1E7A46;
+    --bad:#C5221F;
+
+    --cable:#37474F;
+    --joint:#263238;
+    --coupler:#4527A0;
+    --splitter:#00838F;
+    --fatbox:#C2185B;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; }
+  body{ font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color:var(--ink); overflow:hidden; }
+
+  #map{ position:fixed; inset:0 0 0 var(--side); }
+  .side{
+    position:fixed; top:0; left:0; bottom:0; width:var(--side); background:#fff;
+    border-right:1px solid var(--line); display:flex; flex-direction:column; z-index:10;
+  }
+  .brandbar{ display:flex; align-items:center; gap:9px; padding:12px 15px; border-bottom:1px solid var(--line); }
+  .logo{ font:800 15px/1 system-ui; color:#C62828; font-style:italic; letter-spacing:-.04em; }
+  .brandbar b{ font-size:15px; letter-spacing:-.01em; }
+  .ver{ margin-left:auto; font-size:10.5px; color:var(--grey); }
+
+  .roles{ display:flex; border-bottom:1px solid var(--line); }
+  .roles button{
+    flex:1; appearance:none; background:#fff; border:0; border-bottom:2px solid transparent;
+    cursor:pointer; padding:10px 6px 8px; font:600 12.5px system-ui; color:var(--grey);
+  }
+  .roles button[aria-pressed="true"]{ color:var(--blue); border-bottom-color:var(--blue); }
+  .roles small{ display:block; font-weight:400; font-size:10px; opacity:.8; }
+
+  .ctx{ padding:9px 15px; background:#F8F9FA; border-bottom:1px solid var(--line); font-size:12.5px; }
+  .ctx__row{ display:flex; gap:10px; padding:1px 0; }
+  .ctx__k{ color:var(--grey); width:58px; flex:0 0 58px; }
+  .ctx__v{ font-weight:600; }
+  .ctx__v.none{ font-weight:400; font-style:italic; color:var(--grey); }
+
+  .body{ flex:1; overflow:auto; padding:15px; }
+  .foot{ padding:11px 15px; border-top:1px solid var(--line); display:flex; gap:8px; }
+  .foot .btn{ flex:1; }
+
+  h2.title{ font-size:17px; margin:0 0 3px; letter-spacing:-.01em; }
+  .lead{ color:var(--grey); font-size:12.5px; margin:0 0 13px; }
+  .lbl{ font:700 10.5px/1 system-ui; letter-spacing:.09em; text-transform:uppercase;
+        color:var(--grey); margin:17px 0 8px; display:flex; align-items:center; gap:8px; }
+  .lbl .r{ margin-left:auto; font-weight:600; letter-spacing:0; text-transform:none; font-size:11px; }
+
+  .btn{ appearance:none; cursor:pointer; background:#fff; color:var(--ink);
+        border:1px solid var(--line); border-radius:7px; padding:9px 12px; font:600 13px system-ui; }
+  .btn:hover{ background:#F1F3F4; }
+  .btn.primary{ background:var(--blue); border-color:var(--blue); color:#fff; }
+  .btn.soft{ background:#E8F0FE; border-color:#D2E3FC; color:#1967D2; }
+  .btn.danger{ color:var(--bad); }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .btn.sm{ padding:5px 9px; font-size:12px; border-radius:6px; }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .chip{ appearance:none; cursor:pointer; background:#fff; border:1px solid var(--line);
+         border-radius:16px; padding:6px 11px; font:600 12px system-ui; color:var(--ink); }
+  .chip.on{ border-color:var(--blue); color:var(--blue); background:#E8F0FE; }
+  .chip:disabled{ opacity:.35; cursor:not-allowed; }
+
+  .layers{ display:flex; margin-bottom:12px; }
+  .layers button{ flex:1; appearance:none; cursor:pointer; background:#fff; border:1px solid var(--line);
+                  border-right:0; padding:7px 5px; font:600 11.5px system-ui; color:var(--grey); }
+  .layers button:first-child{ border-radius:7px 0 0 7px; }
+  .layers button:last-child{ border-right:1px solid var(--line); border-radius:0 7px 7px 0; }
+  .layers button[aria-pressed="true"]{ background:var(--ink); border-color:var(--ink); color:#fff; }
+
+  .row{ display:flex; align-items:center; gap:9px; padding:9px 10px; border:1px solid var(--line);
+        border-radius:8px; margin-bottom:6px; background:#fff; cursor:pointer; }
+  .row:hover{ border-color:var(--blue); }
+  .row.on{ border-color:var(--blue); background:#F5F9FF; }
+  .row b{ font-size:13px; }
+  .row .sub{ font-size:11.5px; color:var(--grey); }
+  .row .meta{ margin-left:auto; font-size:11.5px; color:var(--grey); white-space:nowrap; }
+  .rowmain{ min-width:0; flex:1; }
+  .rowbtns{ display:flex; gap:4px; margin-left:auto; }
+  .ic{ appearance:none; background:#fff; border:1px solid var(--line); border-radius:6px;
+       width:26px; height:26px; cursor:pointer; font-size:12px; color:var(--grey); padding:0; }
+  .ic:hover{ border-color:var(--blue); color:var(--blue); }
+  .ic.del:hover{ border-color:var(--bad); color:var(--bad); }
+
+  .field{ margin-bottom:11px; }
+  .field label{ display:block; font-size:12px; color:var(--grey); margin-bottom:4px; font-weight:600; }
+  .field label i{ color:var(--bad); font-style:normal; }
+  .field input, .field select, .field textarea{
+    width:100%; border:1px solid var(--line); border-radius:7px; padding:9px 10px;
+    font:14px system-ui; color:var(--ink); background:#fff;
+  }
+  .field input:focus, .field select:focus{ outline:2px solid #A8C7FA; outline-offset:-1px; border-color:var(--blue); }
+  .field input.bad{ border-color:var(--bad); }
+  .two{ display:flex; gap:9px; }
+  .two .field{ flex:1; }
+  .msg{ font-size:12px; margin:-5px 0 10px; min-height:16px; color:var(--grey); }
+  .msg.bad{ color:var(--bad); }
+  .msg.good{ color:var(--ok); }
+
+  .swatch{ width:11px; height:11px; border-radius:50%; flex:0 0 11px; border:1px solid rgba(0,0,0,.25); display:inline-block; vertical-align:middle; }
+  .cabledash{ width:15px; height:0; border-top:3px solid var(--cable); flex:0 0 15px; }
+
+  table.tbl{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.tbl th{ text-align:left; font:700 10px system-ui; letter-spacing:.08em; text-transform:uppercase;
+                color:var(--grey); border-bottom:1px solid var(--line); padding:6px 4px; }
+  table.tbl td{ border-bottom:1px solid var(--line2); padding:6px 4px; }
+  .free{ color:var(--ok); font-weight:600; }
+  .dim{ color:var(--grey); }
+
+  .note{ font-size:12px; color:var(--grey); background:#F8F9FA; border-left:2px solid var(--blue);
+         padding:9px 11px; border-radius:0 6px 6px 0; margin-top:13px; }
+  .note.warn{ border-left-color:#F9A825; background:#FEF7E0; color:#7A5B00; }
+
+  .kv{ font-size:12.5px; margin-bottom:3px; }
+  .kv b{ color:var(--grey); font-weight:600; }
+
+  .stat{ display:flex; gap:9px; margin-bottom:9px; }
+  .stat .box{ flex:1; border:1px solid var(--line); border-radius:9px; padding:10px 11px; }
+  .stat .n{ font-size:20px; font-weight:700; letter-spacing:-.02em; }
+  .stat .t{ font-size:11px; color:var(--grey); }
+  .cap{ height:7px; background:#EDEFF1; border-radius:7px; overflow:hidden; margin-top:5px; }
+  .cap i{ display:block; height:100%; background:var(--blue); }
+
+  /* strand picker for splices */
+  .sgrid{ display:flex; gap:10px; }
+  .scol{ flex:1; min-width:0; }
+  .scol h5{ margin:0 0 7px; font:700 10.5px system-ui; letter-spacing:.08em;
+            text-transform:uppercase; color:var(--grey); }
+  .slist{ max-height:230px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:5px; }
+  .sbtn{ display:flex; align-items:center; gap:6px; width:100%; appearance:none; background:#fff;
+         border:1px solid transparent; border-radius:6px; padding:5px 7px; cursor:pointer;
+         font:600 12px system-ui; color:var(--ink); text-align:left; margin-bottom:2px; }
+  .sbtn:hover{ background:#F1F3F4; }
+  .sbtn.on{ border-color:var(--blue); background:#E8F0FE; }
+  .sbtn:disabled{ opacity:.35; cursor:not-allowed; }
+  .sbtn small{ margin-left:auto; color:var(--grey); font-weight:400; }
+
+  /* markers */
+  .mk{ cursor:pointer; }
+  .mk-office{ width:15px; height:15px; border-radius:3px; background:var(--blue); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+  .mk-joint{ width:13px; height:13px; background:var(--joint); border:2px solid #fff; transform:rotate(45deg); box-shadow:0 1px 4px rgba(0,0,0,.4); }
+  .mk-coupler{ width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-bottom:13px solid var(--coupler); filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  .mk-splitter{ width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent; border-top:13px solid var(--splitter); filter:drop-shadow(0 1px 2px rgba(0,0,0,.45)); }
+  .mk-fatbox{ width:14px; height:14px; background:var(--fatbox); border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+  .mk-vtx{ width:9px; height:9px; border-radius:50%; background:#fff; border:2px solid var(--blue); }
+  .mk-here{ width:15px; height:15px; border-radius:50%; background:var(--blue); border:3px solid #fff; box-shadow:0 0 0 3px rgba(26,115,232,.35); }
+  .mk-cust{ width:9px; height:9px; border-radius:50%; background:#fff; border:2px solid var(--fatbox); box-shadow:0 1px 3px rgba(0,0,0,.35); }
+  .mk.fade{ opacity:.2; }
+
+  .maplibregl-popup-content{ font:13px system-ui; border-radius:10px; padding:13px 15px; max-width:275px; }
+  .maplibregl-popup-content h4{ margin:0 0 7px; font-size:14px; }
+
+  .legend{ position:fixed; right:12px; bottom:14px; z-index:11; background:rgba(255,255,255,.96);
+           border:1px solid var(--line); border-radius:8px; padding:9px 11px; font-size:11.5px; }
+  .legend div{ display:flex; align-items:center; gap:7px; margin-top:4px; }
+  .legend .lt{ font:700 10px system-ui; letter-spacing:.08em; text-transform:uppercase; color:var(--grey); }
+
+  .banner{
+    position:fixed; top:0; left:var(--side); right:0; z-index:12;
+    background:#F1F3F4; border-bottom:1px solid var(--line);
+    padding:5px 13px; font-size:12px; color:var(--grey);
+    display:flex; align-items:center; gap:14px;
+  }
+  .banner .bgap{ flex:1; }
+  .banner .lnk{
+    appearance:none; background:none; border:0; cursor:pointer;
+    font:600 12px system-ui; color:var(--blue); padding:2px 0;
+  }
+  .banner .lnk:hover{ text-decoration:underline; }
+  .banner #saveState.dirty{ color:#B06000; }
+
+  .hintbar{ position:fixed; top:0; left:var(--side); right:0; z-index:13; background:var(--blue);
+            color:#fff; padding:9px 14px; font:600 13px system-ui; display:none; }
+  .hintbar.on{ display:block; }
+
+  @media (max-width:860px){
+    :root{ --side:100%; }
+    #map{ inset:0; }
+    .side{ height:58%; bottom:auto; border-right:0; border-bottom:1px solid var(--line); }
+    .banner,.hintbar{ left:0; }
+    .sgrid{ flex-direction:column; }
+  }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+<div class="banner" id="banner">
+  <span id="saveState">Saved in this browser</span>
+  <span class="bgap"></span>
+  <button class="lnk" id="btnPull">Reload from sheet</button>
+  <button class="lnk" id="btnSave">Download Excel copy</button>
+  <button class="lnk" id="btnLoad">Load from Excel</button>
+  <button class="lnk" id="btnReset">Start empty</button>
+  <input type="file" id="fileIn" accept=".xlsx,.xls" style="display:none">
+</div>
+<div class="hintbar" id="hint"></div>
+
+<aside class="side">
+  <div class="brandbar"><span class="logo">SCC</span><b>Network Map</b><span class="ver">v29</span></div>
+  <div class="roles" role="group">
+    <button id="rEng" aria-pressed="true">Field engineer<small>add, edit, splice</small></button>
+    <button id="rSales" aria-pressed="false">Sales<small>look up only</small></button>
+  </div>
+  <div class="ctx" id="ctx"></div>
+  <div class="body" id="body"></div>
+  <div class="foot" id="foot"></div>
+</aside>
+
+<div class="legend" id="legend"></div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+(function(){
+"use strict";
+
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+/* ============================================================
+   TIA-598 colour code. Everything strand-related derives from this.
+   ============================================================ */
+var COLOURS = ['Blue','Orange','Green','Brown','Slate','White',
+               'Red','Black','Yellow','Violet','Rose','Aqua'];
+var HEX = ['#1565C0','#EF6C00','#2E7D32','#6D4C41','#607D8B','#FFFFFF',
+           '#D32F2F','#212121','#F9A825','#7B1FA2','#EC407A','#00ACC1'];
+
+function strandHex(n){ return HEX[(n-1)%12]; }
+function strandLabel(n, cores){
+  var c = COLOURS[(n-1)%12];
+  if (cores <= 12) return n + ' \u00b7 ' + c;
+  var tube = Math.ceil(n/12);
+  return n + ' \u00b7 ' + c + ' in ' + COLOURS[(tube-1)%12].toLowerCase();
+}
+function swatch(n){
+  var h = strandHex(n);
+  return '<span class="swatch" style="background:'+h+
+         (h==='#FFFFFF'?';border-color:#212121':'')+'"></span>';
+}
+
+/* A coupler takes one strand in and gives TWO out, sharing the light unevenly.
+   tap = the small share pulled off here. pass = the big share carried onward. */
+var COUPLER_VALUES = [
+  { ratio:'50/50', tap:50, pass:50, tapLoss:3.20,  passLoss:3.20 },
+  { ratio:'45/55', tap:45, pass:55, tapLoss:3.60,  passLoss:2.75 },
+  { ratio:'40/60', tap:40, pass:60, tapLoss:4.20,  passLoss:2.36 },
+  { ratio:'35/65', tap:35, pass:65, tapLoss:4.80,  passLoss:2.07 },
+  { ratio:'30/70', tap:30, pass:70, tapLoss:5.50,  passLoss:1.67 },
+  { ratio:'25/75', tap:25, pass:75, tapLoss:6.20,  passLoss:1.50 },
+  { ratio:'20/80', tap:20, pass:80, tapLoss:7.45,  passLoss:1.07 },
+  { ratio:'15/85', tap:15, pass:85, tapLoss:8.40,  passLoss:0.91 },
+  { ratio:'10/90', tap:10, pass:90, tapLoss:10.50, passLoss:0.65 },
+  { ratio:'05/95', tap:5,  pass:95, tapLoss:13.90, passLoss:0.35 }
+];
+function couplerSpec(r){
+  for (var i=0;i<COUPLER_VALUES.length;i++) if (COUPLER_VALUES[i].ratio===r) return COUPLER_VALUES[i];
+  return COUPLER_VALUES[0];
+}
+
+/* A splitter takes one strand in and gives MANY out, sharing the light evenly.
+   Loss figures are the usual PLC insertion loss for each size. */
+var SPLITTER_TYPES = [
+  { ratio:'1:2',  ways:2,  loss:3.6  },
+  { ratio:'1:4',  ways:4,  loss:7.3  },
+  { ratio:'1:8',  ways:8,  loss:10.5 },
+  { ratio:'1:16', ways:16, loss:13.7 },
+  { ratio:'1:32', ways:32, loss:17.1 }
+];
+function splitterSpec(r){
+  for (var i=0;i<SPLITTER_TYPES.length;i++) if (SPLITTER_TYPES[i].ratio===r) return SPLITTER_TYPES[i];
+  return SPLITTER_TYPES[2];
+}
+
+/* Build the leg list for a device. Legs are what light leaves by. */
+function makeLegs(type, ratio){
+  if (type==='COUPLER'){
+    var sp=couplerSpec(ratio);
+    return [
+      { id:'tap',  label:'Tap \u00b7 '+sp.tap+'%',  loss:sp.tapLoss,  to:null },
+      { id:'pass', label:'Pass \u00b7 '+sp.pass+'%', loss:sp.passLoss, to:null }
+    ];
+  }
+  var s=splitterSpec(ratio), out=[];
+  for (var i=1;i<=s.ways;i++){
+    out.push({ id:'o'+i, label:'Out '+i, loss:s.loss, to:null });
+  }
+  return out;
+}
+
+/* Which device output, if any, feeds this device. */
+function legFeedOf(devId){
+  for (var i=0;i<D.nodes.length;i++){
+    var n=D.nodes[i];
+    if (!n.legs) continue;
+    for (var j=0;j<n.legs.length;j++){
+      var g=n.legs[j];
+      if (g.to && g.to.kind==='DEVICE' && g.to.node===devId) return { node:n, leg:g };
+    }
+  }
+  return null;
+}
+
+/* Where a leg points, in words. to = {kind:'CABLE'|'FATBOX'|'DEVICE', ...} */
+function legTarget(to){
+  if (!to) return '';
+  if (to.kind==='FATBOX' || to.kind==='DEVICE'){
+    var n=node(to.node); return n ? n.name : '(deleted)';
+  }
+  var c=cable(to.cable);
+  return to.cable+' \u00b7 '+(c ? strandLabel(to.strand,c.cores) : to.strand);
+}
+var CORE_OPTIONS = [2,4,6,12,24,48,96,144];
+
+/* How close a cable must pass for a joint to be able to splice into it. */
+var JOINT_REACH_M = 40;
+
+/* ============================================================
+   DATA — invented, but shaped like the real thing.
+   Layer 1 is physical plant. Layer 2 is the service network.
+   ============================================================ */
+var D = {};
+function seed(){
+  D = {
+    cables:[
+      { id:'F-018', cores:24, kind:'Feeder', note:'Laid 2023, south along Bund Garden Road.',
+        path:[[73.877749,18.532718],[73.878300,18.531600],[73.878450,18.530400],
+              [73.878576,18.529100],[73.878702,18.527900]] },
+      { id:'F-022', cores:12, kind:'Distribution', note:'West spur toward Wadia College.',
+        path:[[73.878450,18.530400],[73.877100,18.530250],[73.875800,18.530050],
+              [73.874500,18.529900]] },
+      { id:'F-031', cores:6, kind:'Distribution', note:'Short east spur.',
+        path:[[73.878450,18.530400],[73.879600,18.530600],[73.880700,18.530900]] }
+    ],
+    nodes:[
+      { id:'JE-004', type:'JOINT',   cable:'F-018', at:[73.878450,18.530400],
+        name:'JE-004', note:'F-018 meets F-022 and F-031.' },
+      { id:'CP-007', type:'COUPLER', cable:'F-018', at:[73.878576,18.529100],
+        name:'CP-007', ratio:'40/60', inCable:'F-018', inStrand:5,
+        legs:[ { id:'tap',  label:'Tap \u00b7 40%',  loss:4.20, to:{kind:'FATBOX', node:'FB-011'} },
+               { id:'pass', label:'Pass \u00b7 60%', loss:2.36, to:{kind:'CABLE', cable:'F-018', strand:6} } ] },
+      { id:'SP-002', type:'SPLITTER', cable:'F-022', at:[73.877100,18.530250],
+        name:'SP-002', ratio:'1:4', inCable:'F-022', inStrand:4,
+        legs:[ { id:'o1', label:'Out 1', loss:7.3, to:{kind:'FATBOX', node:'FB-014'} },
+               { id:'o2', label:'Out 2', loss:7.3, to:{kind:'FATBOX', node:'FB-019'} },
+               { id:'o3', label:'Out 3', loss:7.3, to:null },
+               { id:'o4', label:'Out 4', loss:7.3, to:null } ] },
+      { id:'FB-011', type:'FATBOX',  cable:null, at:[73.878702,18.527900],
+        name:'FB-011', no:'011', ports:16,
+        customers:[{port:1,name:'Shah Residence',   at:[73.879100,18.527600]},
+                   {port:2,name:'Kamat Stores',     at:[73.878300,18.527500]},
+                   {port:3,name:'Flat 4B, Sai Apts',at:[73.878900,18.528250]}] },
+      { id:'FB-014', type:'FATBOX',  cable:null, at:[73.875800,18.530050],
+        name:'FB-014', no:'014', ports:4,
+        customers:[{port:1,name:'Wadia Canteen',   at:[73.875400,18.530400]},
+                   {port:2,name:'Hostel Block C',  at:[73.876200,18.530450]},
+                   {port:3,name:'Gokhale Bakery',  at:[73.875600,18.529650]},
+                   {port:4,name:'Deshpande Clinic',at:[73.876100,18.529700]}] },
+      { id:'FB-019', type:'FATBOX',  cable:null, at:[73.874500,18.529900],
+        name:'FB-019', no:'019', ports:16,
+        customers:[{port:1,name:'Patil Traders',at:[73.874100,18.530250]}] },
+      { id:'FB-022', type:'FATBOX',  cable:null, at:[73.880700,18.530900],
+        name:'FB-022', no:'022', ports:8, customers:[] }
+    ],
+    splices:[
+      { id:'S1', joint:'JE-004', aCable:'F-018', aStrand:2,  bCable:'F-022', bStrand:1 },
+      { id:'S2', joint:'JE-004', aCable:'F-018', aStrand:14, bCable:'F-022', bStrand:2 },
+      { id:'S3', joint:'JE-004', aCable:'F-018', aStrand:8,  bCable:'F-031', bStrand:2 }
+    ],
+    offices:[
+      { id:'L1', name:'Ruby Hall Clinic', at:[73.877749,18.532718] },
+      { id:'L2', name:'Lohegaon Hub',     at:[73.879900,18.533900] }
+    ],
+    olts:[
+      { id:'O1', office:'L1', name:'OLT 1' },
+      { id:'O2', office:'L1', name:'OLT 2' },
+      { id:'O3', office:'L2', name:'OLT 3' }
+    ],
+    /* the join between the two layers: a port borrows a strand */
+    ports:[
+      { id:'P1', olt:'O1', name:'Port 1', cable:'F-018', strand:1,  serves:'FB-011' },
+      { id:'P2', olt:'O1', name:'Port 2', cable:'F-018', strand:2,  serves:'FB-014' },
+      { id:'P3', olt:'O1', name:'Port 3', cable:null,    strand:null, serves:null },
+      { id:'P4', olt:'O2', name:'Port 1', cable:'F-018', strand:14, serves:'FB-019' },
+      { id:'P5', olt:'O2', name:'Port 2', cable:'F-031', strand:2,  serves:'FB-022' },
+      { id:'P6', olt:'O3', name:'Port 1', cable:'F-018', strand:19, serves:'FB-011' }
+    ]
+  };
+}
+seed();
+
+/* ============================================================
+   STORE \u2014 the browser holds the working copy, Excel is the file you keep.
+   ============================================================ */
+/* =========================================================================
+   BACKEND — paste your Apps Script web app URL and edit key here.
+   Leave API blank and the map still works, saving only in this browser.
+   ========================================================================= */
+var API = '';                          // e.g. https://script.google.com/macros/s/AKfy.../exec
+var KEY = 'CHANGE-ME-BEFORE-DEPLOY';   // must match EDIT_KEY in Code.gs
+
+var STORE_KEY='scc_network_map_v1';
+var dirty=false, syncTimer=null, syncing=false, lastError='';
+function online(){ return !!API; }
+
+function markSaved(msg){
+  var el=document.getElementById('saveState');
+  if (!el) return;
+  el.textContent=msg||'Saved in this browser';
+  el.className='';
+}
+function markDirty(){
+  dirty=true;
+  var el=document.getElementById('saveState');
+  if (el){ el.textContent='Saving\u2026'; el.className='dirty'; }
+}
+
+function persist(){
+  /* the browser copy is written immediately, so a refresh never loses work */
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(D)); }catch(e){}
+
+  if (!online()){ markSaved('Saved in this browser'); return; }
+
+  markDirty();
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(pushToServer, 900);   // one write per pause, not per click
+}
+
+function pushToServer(){
+  if (!online() || syncing) { if (syncing) syncTimer=setTimeout(pushToServer,700); return; }
+  syncing=true;
+  var el=document.getElementById('saveState');
+  if (el){ el.textContent='Saving to the sheet\u2026'; el.className='dirty'; }
+
+  fetch(API, {
+    method:'POST',
+    headers:{ 'Content-Type':'text/plain;charset=utf-8' },  // avoids a CORS preflight
+    body: JSON.stringify({ action:'saveAll', key:KEY, data:D })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(res){
+    syncing=false;
+    if (!res.ok) throw new Error(res.error||'The sheet refused the write.');
+    dirty=false; lastError='';
+    markSaved('Saved to the sheet');
+  })
+  .catch(function(err){
+    syncing=false;
+    lastError=String(err.message||err);
+    var e2=document.getElementById('saveState');
+    if (e2){
+      e2.className='dirty';
+      e2.textContent='Not saved to the sheet \u2014 ' + lastError;
+      e2.title=lastError;
+    }
+  });
+}
+
+function pullFromServer(){
+  if (!online()) return Promise.resolve(false);
+  var el=document.getElementById('saveState');
+  if (el){ el.textContent='Loading from the sheet\u2026'; el.className='dirty'; }
+
+  return fetch(API + '?cb=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(res){
+      if (!res || !res.ok) throw new Error((res && res.error) || 'No data came back.');
+      D = fromServer(res);
+      markSaved('Loaded from the sheet');
+      return true;
+    })
+    .catch(function(err){
+      lastError=String(err.message||err);
+      var e2=document.getElementById('saveState');
+      if (e2){ e2.className='dirty'; e2.textContent='Sheet unreachable \u2014 working offline'; }
+      return false;
+    });
+}
+
+/* Turn the sheet's flat rows back into the shape the map works with. */
+function fromServer(res){
+  var N={ offices:[], olts:[], ports:[], cables:[], nodes:[], splices:[] };
+
+  (res.locations||[]).forEach(function(r){
+    N.offices.push({ id:r.id, name:r.name, address:r.address, link:r.link,
+                     at:[Number(r.lng), Number(r.lat)], created:r.created });
+  });
+  (res.olts||[]).forEach(function(r){
+    N.olts.push({ id:r.id, office:r.locationId, name:r.name, created:r.created });
+  });
+  (res.ports||[]).forEach(function(r){
+    N.ports.push({ id:r.id, olt:r.oltId, name:r.name,
+                   cable:r.cableId||null, strand:r.strand?Number(r.strand):null,
+                   serves:null, created:r.created });
+  });
+  (res.cables||[]).forEach(function(r){
+    N.cables.push({ id:r.id, cores:Number(r.cores), kind:r.kind, note:r.note,
+                    path:(r.path||[]).map(function(p){ return [Number(p[0]),Number(p[1])]; }),
+                    created:r.created });
+  });
+  (res.objects||[]).forEach(function(r){
+    var n={ id:r.id, type:r.type, name:r.name, cable:r.cableId||null,
+            at:[Number(r.lng), Number(r.lat)], note:r.note, created:r.created,
+            inCable:r.inCable||null, inStrand:r.inStrand?Number(r.inStrand):null };
+    if (r.ratio) n.ratio=r.ratio;
+    if (r.type==='COUPLER'||r.type==='SPLITTER'){
+      n.legs=(r.legs||[]).map(function(g){
+        var to=null;
+        if (g.toKind==='CABLE') to={ kind:'CABLE', cable:g.toCable, strand:Number(g.toStrand) };
+        else if (g.toKind) to={ kind:g.toKind, node:g.toNode };
+        return { id:g.legId, label:g.label, loss:Number(g.loss), to:to };
+      });
+      if (!n.legs.length) n.legs=makeLegs(n.type, n.ratio);
+    }
+    if (r.type==='FATBOX'){
+      n.no=r.fatNo; n.ports=Number(r.fatPorts||8);
+      n.customers=(r.customers||[]).map(function(c){
+        return { port:Number(c.port), name:c.name,
+                 at:(c.lat!==''&&c.lng!=='')?[Number(c.lng),Number(c.lat)]:null };
+      });
+    }
+    N.nodes.push(n);
+  });
+  (res.splices||[]).forEach(function(r){
+    N.splices.push({ id:r.id, joint:r.jointId,
+                     aCable:r.aCable, aStrand:Number(r.aStrand),
+                     bCable:r.bCable, bStrand:Number(r.bStrand), created:r.created });
+  });
+  return N;
+}
+
+/* Resolve a Google link through the backend, which can follow short links. */
+function resolveViaServer(url){
+  if (!online()) return Promise.resolve(null);
+  return fetch(API + '?action=resolve&link=' + encodeURIComponent(url) + '&cb=' + Date.now())
+    .then(function(r){ return r.json(); })
+    .then(function(res){ return res.ok ? [Number(res.lng), Number(res.lat)] : null; })
+    .catch(function(){ return null; });
+}
+function restore(){
+  try{
+    var raw=localStorage.getItem(STORE_KEY);
+    if (!raw) return false;
+    var o=JSON.parse(raw);
+    if (!o || !o.cables) return false;
+    D=o;
+    ['cables','nodes','splices','offices','olts','ports'].forEach(function(k){
+      if (!D[k]) D[k]=[];
+    });
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---- Excel: one sheet per table, flat so a human can read it ---- */
+function toWorkbook(){
+  var wb=XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.offices.map(function(o){
+      return { id:o.id, name:o.name, lat:o.at[1], lng:o.at[0] };
+    })), 'offices');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.olts.map(function(o){ return { id:o.id, office_id:o.office, name:o.name }; })), 'olts');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.ports.map(function(p){
+      return { id:p.id, olt_id:p.olt, name:p.name,
+               cable_id:p.cable||'', strand:p.strand||'', serves:p.serves||'' };
+    })), 'ports');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.cables.map(function(c){
+      return { id:c.id, cores:c.cores, kind:c.kind, note:c.note||'',
+               length_m:Math.round(pathLen(c.path)), points:c.path.length };
+    })), 'cables');
+
+  var pts=[];
+  D.cables.forEach(function(c){
+    c.path.forEach(function(p,i){
+      pts.push({ cable_id:c.id, seq:i+1, lat:p[1], lng:p[0] });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pts), 'cable_points');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.nodes.map(function(n){
+      return { id:n.id, type:n.type, name:n.name, on_cable:n.cable||'',
+               lat:n.at[1], lng:n.at[0], ratio:n.ratio||'',
+               fat_no:n.no||'', fat_ports:n.ports||'',
+               fed_by_cable:n.inCable||'', fed_by_strand:n.inStrand||'', note:n.note||'' };
+    })), 'objects');
+
+  var legs=[];
+  D.nodes.forEach(function(n){
+    (n.legs||[]).forEach(function(g){
+      legs.push({ node_id:n.id, node_name:n.name, leg:g.label,
+                  loss_db:g.loss,
+                  goes_to: g.to ? (g.to.kind==='CABLE'
+                    ? g.to.cable+' strand '+g.to.strand : g.to.node) : '',
+                  to_type: g.to ? g.to.kind : '' });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(legs), 'object_outputs');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    D.splices.map(function(x){
+      return { id:x.id, joint:x.joint, cable_a:x.aCable, strand_a:x.aStrand,
+               cable_b:x.bCable, strand_b:x.bStrand };
+    })), 'splices');
+
+  var cust=[];
+  D.nodes.forEach(function(n){
+    if (n.type!=='FATBOX') return;
+    (n.customers||[]).forEach(function(c){
+      cust.push({ fat_box:n.name, fat_no:n.no||'', port:c.port, customer:c.name,
+                  lat:c.at?c.at[1]:'', lng:c.at?c.at[0]:'',
+                  drop_m:c.at?Math.round(metres(n.at,c.at)):'' });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cust), 'customers');
+
+  return wb;
+}
+
+function saveExcel(){
+  try{
+    var d=new Date();
+    var stamp=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+    XLSX.writeFile(toWorkbook(), 'scc-network-map-'+stamp+'.xlsx');
+    markSaved('Downloaded');
+    setTimeout(markSaved, 2500);
+  }catch(e){ alert('Could not build the file: '+e.message); }
+}
+
+function rows(wb, name){
+  var sh=wb.Sheets[name];
+  return sh ? XLSX.utils.sheet_to_json(sh, { defval:'' }) : [];
+}
+
+function loadExcel(file){
+  var fr=new FileReader();
+  fr.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result), { type:'array' });
+      var N={ offices:[], olts:[], ports:[], cables:[], nodes:[], splices:[] };
+
+      rows(wb,'offices').forEach(function(r){
+        N.offices.push({ id:String(r.id), name:String(r.name),
+                         at:[Number(r.lng), Number(r.lat)] });
+      });
+      rows(wb,'olts').forEach(function(r){
+        N.olts.push({ id:String(r.id), office:String(r.office_id), name:String(r.name) });
+      });
+      rows(wb,'ports').forEach(function(r){
+        N.ports.push({ id:String(r.id), olt:String(r.olt_id), name:String(r.name),
+                       cable:r.cable_id?String(r.cable_id):null,
+                       strand:r.strand?Number(r.strand):null,
+                       serves:r.serves?String(r.serves):null });
+      });
+
+      var byCable={};
+      rows(wb,'cable_points').forEach(function(r){
+        (byCable[String(r.cable_id)] = byCable[String(r.cable_id)] || [])
+          .push({ seq:Number(r.seq), at:[Number(r.lng), Number(r.lat)] });
+      });
+      rows(wb,'cables').forEach(function(r){
+        var pl=(byCable[String(r.id)]||[]).sort(function(a,b){ return a.seq-b.seq; })
+                 .map(function(x){ return x.at; });
+        if (pl.length<2) return;
+        N.cables.push({ id:String(r.id), cores:Number(r.cores), kind:String(r.kind),
+                        note:String(r.note||''), path:pl });
+      });
+
+      rows(wb,'objects').forEach(function(r){
+        var n={ id:String(r.id), type:String(r.type), name:String(r.name),
+                cable:r.on_cable?String(r.on_cable):null,
+                at:[Number(r.lng), Number(r.lat)], note:String(r.note||''),
+                inCable:r.fed_by_cable?String(r.fed_by_cable):null,
+                inStrand:r.fed_by_strand?Number(r.fed_by_strand):null };
+        if (r.ratio) n.ratio=String(r.ratio);
+        if (n.type==='COUPLER'||n.type==='SPLITTER') n.legs=makeLegs(n.type, n.ratio);
+        if (n.type==='FATBOX'){
+          n.no=String(r.fat_no||''); n.ports=Number(r.fat_ports||8); n.customers=[];
+        }
+        N.nodes.push(n);
+      });
+
+      /* reconnect the outputs once every object exists */
+      rows(wb,'object_outputs').forEach(function(r){
+        var n=N.nodes.filter(function(x){ return x.id===String(r.node_id); })[0];
+        if (!n || !n.legs || !r.goes_to) return;
+        var g=n.legs.filter(function(x){ return x.label===String(r.leg); })[0];
+        if (!g) return;
+        if (String(r.to_type)==='CABLE'){
+          var m=String(r.goes_to).match(/^(.+) strand (\d+)$/);
+          if (m) g.to={ kind:'CABLE', cable:m[1], strand:Number(m[2]) };
+        } else if (r.to_type){
+          g.to={ kind:String(r.to_type), node:String(r.goes_to) };
+        }
+      });
+
+      rows(wb,'splices').forEach(function(r){
+        N.splices.push({ id:String(r.id), joint:String(r.joint),
+                         aCable:String(r.cable_a), aStrand:Number(r.strand_a),
+                         bCable:String(r.cable_b), bStrand:Number(r.strand_b) });
+      });
+
+      rows(wb,'customers').forEach(function(r){
+        var fb=N.nodes.filter(function(x){
+          return x.type==='FATBOX' && x.name===String(r.fat_box); })[0];
+        if (!fb) return;
+        fb.customers.push({ port:Number(r.port), name:String(r.customer),
+                            at:(r.lat!==''&&r.lng!=='')?[Number(r.lng),Number(r.lat)]:null });
+      });
+
+      D=N;
+      sel={ cable:null, node:null, olt:null, office:null, port:null };
+      view='home'; draft=null; custDraft=null; legPick=null; pick=null;
+      persist(); draw(); render(); fitAll();
+      markSaved('Loaded from Excel');
+      setTimeout(markSaved, 2500);
+    }catch(err){
+      alert('That file could not be read.\n\n'+err.message+
+            '\n\nUse a file this app produced with Save to Excel.');
+    }
+  };
+  fr.readAsArrayBuffer(file);
+}
+
+function fitAll(){
+  var pts=[];
+  D.cables.forEach(function(c){ c.path.forEach(function(p){ pts.push(p); }); });
+  D.nodes.forEach(function(n){ pts.push(n.at); });
+  D.offices.forEach(function(o){ pts.push(o.at); });
+  if (!pts.length || !ready) return;
+  var bb=new maplibregl.LngLatBounds(pts[0], pts[0]);
+  pts.forEach(function(p){ bb.extend(p); });
+  map.fitBounds(bb, { padding:80, duration:600, maxZoom:17 });
+}
+
+/* Pull lat/lng straight out of a Google Maps URL. Short goo.gl links cannot be
+   followed from a browser, so those are reported rather than guessed at. */
+function coordsFromLink(url){
+  if (!url) return null;
+  var pats=[
+    /@(-?\d+\.\d+),(-?\d+\.\d+)/,
+    /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+    /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+    /[?&]ll=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+    /^\s*(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)\s*$/
+  ];
+  for (var i=0;i<pats.length;i++){
+    var m=url.match(pats[i]);
+    if (m){
+      var la=parseFloat(m[1]), lg=parseFloat(m[2]);
+      if (la>=-90&&la<=90&&lg>=-180&&lg<=180) return [lg,la];
+    }
+  }
+  return null;
+}
+function isShortLink(url){ return /goo\.gl|maps\.app/.test(url||''); }
+
+/* ---------- lookups ---------- */
+function markerClass(t){
+  return t==='JOINT' ? 'mk-joint'
+       : t==='COUPLER' ? 'mk-coupler'
+       : t==='SPLITTER' ? 'mk-splitter' : 'mk-fatbox';
+}
+function typeName(t){
+  return t==='JOINT' ? 'Joint enclosure'
+       : t==='COUPLER' ? 'Coupler'
+       : t==='SPLITTER' ? 'Splitter' : 'FAT box';
+}
+function cable(id){ return D.cables.filter(function(c){ return c.id===id; })[0] || null; }
+function node(id){ return D.nodes.filter(function(n){ return n.id===id; })[0] || null; }
+function olt(id){ return D.olts.filter(function(o){ return o.id===id; })[0] || null; }
+function office(id){ return D.offices.filter(function(o){ return o.id===id; })[0] || null; }
+function nodesOn(cid){ return D.nodes.filter(function(n){ return n.cable===cid; }); }
+function splicesAt(jid){ return D.splices.filter(function(s){ return s.joint===jid; }); }
+function portsUsing(cid){ return D.ports.filter(function(p){ return p.cable===cid; }); }
+
+/* A strand is one continuous thread of glass with TWO ends. Something can be
+   attached at each end \u2014 light arrives at one and leaves at the other. So a
+   strand is only finished when it has two attachments, not one. */
+function strandUses(cid){
+  var c=cable(cid);
+  var out = {};
+  /* role: SOURCE puts light onto the strand, SINK takes it off.
+     EITHER is a splice, which can act as either end. */
+  function add(strand, who, at, role, id){
+    if (!strand) return;
+    var along = (at && c) ? snapToPath(at, c.path).along : 0;
+    (out[strand] = out[strand] || []).push({ who:who, along:along, role:role, id:id||'' });
+  }
+
+  portsUsing(cid).forEach(function(p){
+    var o=olt(p.olt), off=o?office(o.office):null;
+    add(p.strand, (o?o.name:'OLT')+' / '+p.name, off?off.at:null, 'SOURCE', p.id);
+  });
+  D.splices.forEach(function(s){
+    var j=node(s.joint);
+    if (s.aCable===cid) add(s.aStrand, 'spliced at '+s.joint, j?j.at:null, 'EITHER', s.id);
+    if (s.bCable===cid) add(s.bStrand, 'spliced at '+s.joint, j?j.at:null, 'EITHER', s.id);
+  });
+  D.nodes.forEach(function(n){
+    if (n.inCable===cid) add(n.inStrand, 'feeds '+n.name, n.at, 'SINK', n.id);
+    if (!n.legs) return;
+    n.legs.forEach(function(g){
+      if (g.to && g.to.kind==='CABLE' && g.to.cable===cid){
+        add(g.to.strand, n.name+' \u00b7 '+g.label, n.at, 'SOURCE', n.id);
+      }
+    });
+  });
+
+  /* order each strand's attachments along the cable, so they read start to end */
+  Object.keys(out).forEach(function(k){
+    out[k].sort(function(a,b){ return a.along-b.along; });
+  });
+  return out;
+}
+
+function strandEndsUsed(uses, n){ return (uses[n]||[]).length; }
+
+/* Can something new be attached to this strand at this point along the cable?
+   Everything already attached cuts the strand at a known distance. A new cut
+   between two existing ones would sever a live segment, so it is refused.
+   Beyond the first or the last is fine \u2014 that is just extending the chain. */
+/* Can something new attach to this strand here, and what breaks if not?
+   Light enters a strand at a SOURCE and leaves it at the first SINK it meets.
+   A second SINK further along would sit on dead glass, because the first one
+   already took the light off. */
+function attachCheck(uses, n, along, role){
+  var a=(uses[n]||[]).slice().sort(function(x,y){ return x.along-y.along; });
+  if (!a.length) return { ok:true };
+
+  /* cutting between two points that already run together severs a live length */
+  for (var i=1;i<a.length;i++){
+    if (along > a[i-1].along + 1 && along < a[i].along - 1){
+      return { ok:false, why:'this would cut the length between ' +
+               a[i-1].who + ' and ' + a[i].who };
+    }
+  }
+
+  if (role==='SINK'){
+    /* is there already something taking light off this strand, with no
+       source in between to put it back? */
+    var before=a.filter(function(x){ return x.along <= along + 1; });
+    for (var j=before.length-1;j>=0;j--){
+      if (before[j].role==='SOURCE') break;
+      if (before[j].role==='SINK'){
+        return { ok:false, why:before[j].who + ' already takes the light off this strand' };
+      }
+    }
+    var after=a.filter(function(x){ return x.along > along + 1; });
+    for (var k=0;k<after.length;k++){
+      if (after[k].role==='SOURCE') break;
+      if (after[k].role==='SINK'){
+        return { ok:false, why:after[k].who + ' already takes the light off this strand' };
+      }
+    }
+  }
+
+  if (role==='SOURCE'){
+    var same=a.filter(function(x){ return x.role==='SOURCE'; });
+    for (var m=0;m<same.length;m++){
+      var between=a.filter(function(x){
+        return x.role!=='SOURCE' &&
+               x.along > Math.min(same[m].along, along) &&
+               x.along < Math.max(same[m].along, along);
+      });
+      if (!between.length){
+        return { ok:false, why:same[m].who + ' already feeds this strand' };
+      }
+    }
+  }
+  return { ok:true };
+}
+
+/* kept for callers that only want a yes or no */
+function canAttachAt(uses, n, along, role){
+  return attachCheck(uses, n, along, role||'SINK').ok;
+}
+
+/* What to show next to a strand: the chain of what it runs between. */
+function strandStatus(uses, n){
+  var a=uses[n]||[];
+  if (!a.length) return { text:'free', cls:'free' };
+  if (a.length===1) return { text:a[0].who+' \u00b7 nothing at the far end yet', cls:'free' };
+  return { text:a.map(function(x){ return x.who; }).join(' \u2192 '), cls:'dim' };
+}
+
+/* The same chain, with how far along the cable each point sits. */
+function strandChain(uses, n){
+  return (uses[n]||[]).map(function(x){
+    return x.who+' ('+fmtM(x.along)+')';
+  }).join(' \u2192 ');
+}
+
+/* kept for the places that only need a yes/no */
+function strandUsers(cid){
+  var uses=strandUses(cid), out={};
+  Object.keys(uses).forEach(function(k){
+    if (uses[k].length>=2) out[k]=strandStatus(uses,k).text;
+  });
+  return out;
+}
+
+/* How many ports of a FAT box are taken. Derived, never typed. */
+function usedPorts(n){ return (n.customers||[]).length; }
+function customerOn(n, port){
+  var list=n.customers||[];
+  for (var i=0;i<list.length;i++) if (list[i].port===port) return list[i];
+  return null;
+}
+function firstFreePort(n){
+  for (var p=1;p<=n.ports;p++) if (!customerOn(n,p)) return p;
+  return null;
+}
+
+/* What feeds a FAT box, if anything. */
+function feedOf(fatId){
+  for (var i=0;i<D.nodes.length;i++){
+    var n=D.nodes[i];
+    if (!n.legs) continue;
+    for (var j=0;j<n.legs.length;j++){
+      var g=n.legs[j];
+      if (g.to && g.to.kind==='FATBOX' && g.to.node===fatId) return { node:n, leg:g };
+    }
+  }
+  var f=node(fatId);
+  if (f && f.inCable) return { direct:true, node:f, leg:null };
+  return null;
+}
+function freeCount(c){
+  var u=strandUses(c.id), n=0;
+  for (var i=1;i<=c.cores;i++) if (!(u[i]||[]).length) n++;
+  return n;
+}
+
+/* ---------- geometry ---------- */
+function metres(a,b){
+  var R=6371000,t1=a[1]*Math.PI/180,t2=b[1]*Math.PI/180;
+  var dt=(b[1]-a[1])*Math.PI/180,dl=(b[0]-a[0])*Math.PI/180;
+  var x=Math.sin(dt/2)*Math.sin(dt/2)+Math.cos(t1)*Math.cos(t2)*Math.sin(dl/2)*Math.sin(dl/2);
+  return 2*R*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function fmtM(m){ return m>=1000 ? (m/1000).toFixed(2)+' km' : Math.round(m)+' m'; }
+function pathLen(p){ var t=0; for(var i=1;i<p.length;i++) t+=metres(p[i-1],p[i]); return t; }
+
+/* nearest point on a polyline — so plant snaps onto its cable */
+function snapToPath(pt, path){
+  var best=null, bd=Infinity, bAlong=0, run=0;
+  for (var i=1;i<path.length;i++){
+    var a=path[i-1], b=path[i];
+    var dx=b[0]-a[0], dy=b[1]-a[1];
+    var len2=dx*dx+dy*dy;
+    var t = len2 ? ((pt[0]-a[0])*dx + (pt[1]-a[1])*dy)/len2 : 0;
+    t = Math.max(0, Math.min(1, t));
+    var q=[a[0]+t*dx, a[1]+t*dy];
+    var d=metres(pt,q);
+    if (d<bd){ bd=d; best=q; bAlong=run+metres(a,q); }
+    run+=metres(a,b);
+  }
+  return { at:best, dist:bd, along:bAlong };
+}
+
+function nextId(prefix, list){
+  var n=1;
+  while (list.some(function(x){ return x.id === prefix+'-'+String(n).padStart(3,'0'); })) n++;
+  return prefix+'-'+String(n).padStart(3,'0');
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+var role='eng', layer='both', view='home';
+var sel={ cable:null, node:null, olt:null, office:null, port:null };
+var draft=null;         // in-progress add flow
+var pick=null;          // splice picking {side, cable, strand}
+var legPick=null;       // {node, leg} while connecting a device input or output
+var pickCable=null;     // which cable the strand picker is showing
+var custDraft=null;     // {node, port, at, name} while placing a customer
+var nbMsg=null;         // last message on the nearby screen, kept across redraws
+var spliceSel={ a:null, b:null };   // which cable each side of the splice editor shows
+var salesPoint=null;
+var map, ready=false, markers=[], popup=null;
+
+function hint(t){
+  var h=$('hint');
+  if (t){ h.textContent=t; h.classList.add('on'); }
+  else  { h.classList.remove('on'); }
+}
+
+/* ============================================================
+   MAP
+   ============================================================ */
+map = new maplibregl.Map({
+  container:'map',
+  style:'https://tiles.openfreemap.org/styles/liberty',
+  center:[73.8781,18.5305], zoom:14.3
+});
+map.addControl(new maplibregl.NavigationControl({showCompass:false}),'bottom-right');
+
+map.on('load', function(){
+  map.addSource('cables',{ type:'geojson', data:{type:'FeatureCollection',features:[]} });
+  map.addLayer({ id:'cables-line', type:'line', source:'cables',
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':['get','color'],'line-width':['get','w'],'line-opacity':['get','o']} });
+
+  /* A cable on the map is clickable, so nothing is findable only through the list. */
+  map.on('click','cables-line', function(e){
+    if (draft || custDraft || role==='sales') return;
+    var id=e.features && e.features[0] && e.features[0].properties.id;
+    if (!id) return;
+    e.originalEvent.stopPropagation();
+    sel.cable=id; view='cable'; draw(); render();
+  });
+  map.on('mouseenter','cables-line', function(){ map.getCanvas().style.cursor='pointer'; });
+  map.on('mouseleave','cables-line', function(){ map.getCanvas().style.cursor=''; });
+
+  map.addSource('svc',{ type:'geojson', data:{type:'FeatureCollection',features:[]} });
+  map.addLayer({ id:'svc-line', type:'line', source:'svc',
+    paint:{'line-color':['get','color'],'line-width':3,'line-opacity':['get','o'],
+           'line-dasharray':[1.5,1.6]} });
+
+  map.addSource('links',{ type:'geojson', data:{type:'FeatureCollection',features:[]} });
+  map.addLayer({ id:'links-line', type:'line', source:'links',
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':['get','color'],'line-width':['get','w'],
+           'line-opacity':['get','o'],'line-dasharray':[2,1.3]} });
+
+  map.addSource('draft',{ type:'geojson', data:{type:'FeatureCollection',features:[]} });
+  map.addLayer({ id:'draft-line', type:'line', source:'draft',
+    layout:{'line-cap':'round','line-join':'round'},
+    paint:{'line-color':'#1A73E8','line-width':4,'line-dasharray':[2,1.4]} });
+
+  ready=true;
+  if (online()){
+    pullFromServer().then(function(got){
+      if (!got) restore();
+      draw(); render(); fitAll();
+    });
+  } else {
+    if (restore()) { draw(); render(); fitAll(); }
+    else { draw(); render(); }
+  }
+});
+
+map.on('click', function(e){
+  var pt=[e.lngLat.lng, e.lngLat.lat];
+
+  if (role==='sales' || view==='nearby'){
+    salesPoint=pt;
+    nbMsg={ cls:'good', text:'Point set at '+pt[1].toFixed(6)+', '+pt[0].toFixed(6) };
+    draw(); render(); return;
+  }
+
+  if (custDraft){ custDraft.at=pt; draw(); render(); return; }
+  if (!draft) return;
+
+  if (draft.kind==='office'){
+    draft.at=pt; draw(); render();
+  } else if (draft.kind==='route'){
+    draft.path.push(pt); draw(); render();
+  } else if (draft.kind==='node'){
+    if (draft.type==='FATBOX'){
+      // A FAT box hangs on a pole or a wall. It does not sit on the cable route.
+      draft.at=pt; draft.off=null;
+    } else {
+      var c=cable(draft.cable);
+      var sn=snapToPath(pt, c.path);
+      draft.at=sn.at; draft.off=sn.dist;
+    }
+    draw(); render();
+  }
+});
+
+function clearMarkers(){ markers.forEach(function(m){ m.remove(); }); markers=[]; }
+function mk(at, cls, title, onClick){
+  var el=document.createElement('div');
+  el.className='mk '+cls;
+  if (title) el.title=title;
+  if (onClick) el.onclick=function(ev){ ev.stopPropagation(); onClick(); };
+  markers.push(new maplibregl.Marker({element:el}).setLngLat(at).addTo(map));
+  return el;
+}
+function popAt(at, html){
+  if (popup) popup.remove();
+  popup=new maplibregl.Popup({closeButton:true, maxWidth:'290px'})
+    .setLngLat(at).setHTML(html).addTo(map);
+}
+
+function draw(){
+  persist();
+  if (!ready) return;
+  clearMarkers();
+  var phys = (layer!=='service'), serv = (layer!=='physical');
+  if (role==='sales'){ phys=true; serv=false; }
+
+  /* cables */
+  map.getSource('cables').setData({ type:'FeatureCollection', features:
+    D.cables.map(function(c){
+      var lit = !sel.cable || sel.cable===c.id;
+      return { type:'Feature',
+        properties:{ id:c.id,
+                     color: sel.cable===c.id ? '#1A73E8' : '#37474F',
+                     w: 2+Math.min(6, c.cores/6),
+                     o: phys ? (lit?.95:.15) : 0 },
+        geometry:{ type:'LineString', coordinates:c.path } };
+    })
+  });
+
+  /* service overlay */
+  var sf=[];
+  if (serv){
+    D.ports.forEach(function(p){
+      if (!p.serves) return;
+      var o=olt(p.olt); if(!o) return;
+      var off=office(o.office), tgt=node(p.serves);
+      if (!off||!tgt) return;
+      var lit = !sel.olt || sel.olt===p.olt;
+      sf.push({ type:'Feature',
+        properties:{ color:strandHex(p.strand), o: lit?.9:.1 },
+        geometry:{ type:'LineString', coordinates:[off.at, tgt.at] } });
+    });
+  }
+  map.getSource('svc').setData({ type:'FeatureCollection', features:sf });
+
+  /* --- connections: device to what it feeds, cable to FAT, FAT to customer --- */
+  var links=[];
+  if (phys){
+    function line(a,bp,colour,width){
+      links.push({ type:'Feature', properties:{ color:colour, w:width, o:.9 },
+                   geometry:{ type:'LineString', coordinates:[a,bp] } });
+    }
+    var DEVC={ COUPLER:'#4527A0', SPLITTER:'#00838F', JOINT:'#263238', FATBOX:'#C2185B' };
+
+    D.nodes.forEach(function(n){
+      // what a device output feeds
+      if (n.legs){
+        n.legs.forEach(function(g){
+          if (!g.to) return;
+          if (g.to.kind==='FATBOX' || g.to.kind==='DEVICE'){
+            var t=node(g.to.node);
+            if (t) line(n.at, t.at, DEVC[n.type], 2.5);
+          }
+        });
+      }
+      // a FAT box or device fed straight off a strand: draw from the cable to it
+      if (n.inCable){
+        var c0=cable(n.inCable);
+        if (c0){
+          var sp=snapToPath(n.at, c0.path);
+          line(sp.at, n.at, strandHex(n.inStrand)==='#FFFFFF' ? '#9AA0A6' : strandHex(n.inStrand), 2);
+        }
+      }
+      // drop cables out to each customer
+      if (n.type==='FATBOX'){
+        (n.customers||[]).forEach(function(cu){
+          if (cu.at) line(n.at, cu.at, DEVC.FATBOX, 1.6);
+        });
+      }
+    });
+  }
+  map.getSource('links').setData({ type:'FeatureCollection', features:links });
+
+  /* draft route */
+  map.getSource('draft').setData({ type:'FeatureCollection', features:
+    (draft && draft.kind==='route' && draft.path.length>1)
+      ? [{ type:'Feature', properties:{}, geometry:{type:'LineString',coordinates:draft.path} }]
+      : []
+  });
+
+  /* plant */
+  if (phys){
+    D.nodes.forEach(function(n){
+      var fade = sel.cable && sel.cable!==n.cable;
+      mk(n.at, markerClass(n.type)+(fade?' fade':''), n.name, function(){ nodePopup(n); });
+    });
+  }
+  if (serv){
+    D.offices.forEach(function(o){ mk(o.at,'mk-office',o.name,function(){ officePopup(o); }); });
+  }
+
+  /* customers, at the far end of their drop cable */
+  if (phys){
+    D.nodes.forEach(function(n){
+      if (n.type!=='FATBOX') return;
+      (n.customers||[]).forEach(function(cu){
+        if (!cu.at) return;
+        mk(cu.at, 'mk-cust', cu.name, function(){
+          popAt(cu.at, '<h4>'+esc(cu.name)+'</h4>'+
+            '<div class="kv"><b>Connected to:</b> '+esc(n.name)+'</div>'+
+            '<div class="kv"><b>Port:</b> '+String(cu.port).padStart(2,'0')+'</div>'+
+            '<div class="kv"><b>Drop length:</b> '+fmtM(metres(n.at, cu.at))+'</div>');
+        });
+      });
+    });
+  }
+
+  /* a customer being placed right now */
+  if (custDraft && custDraft.at) mk(custDraft.at, 'mk-cust', 'new customer');
+
+  /* draft markers */
+  if (draft && draft.kind==='route'){
+    draft.path.forEach(function(p){ mk(p,'mk-vtx',''); });
+  }
+  if (draft && draft.kind==='office' && draft.at) mk(draft.at,'mk-office','new office');
+  if (draft && draft.kind==='node' && draft.at){
+    mk(draft.at, markerClass(draft.type), 'new');
+  }
+  if (salesPoint) mk(salesPoint,'mk-here','');
+
+  legend();
+}
+
+function legend(){
+  var h='<div class="lt">'+(role==='sales'?'Sales view':
+    layer==='service'?'Service layer':layer==='physical'?'Physical layer':'Both layers')+'</div>';
+  if (role==='sales' || layer!=='service'){
+    h+='<div><span class="cabledash"></span> Cable</div>'+
+       '<div><span class="mk-joint" style="width:9px;height:9px;border-width:1px"></span> Joint</div>'+
+       '<div><span class="mk-coupler" style="border-left-width:5px;border-right-width:5px;border-bottom-width:9px"></span> Coupler</div>'+
+       '<div><span class="mk-splitter" style="border-left-width:5px;border-right-width:5px;border-top-width:9px"></span> Splitter</div>'+
+       '<div><span class="mk-fatbox" style="width:10px;height:10px;border-width:1px"></span> FAT box</div>'+
+       '<div><span class="mk-cust" style="width:8px;height:8px;border-width:1.5px"></span> Customer</div>'+
+       '<div><span style="width:15px;border-top:2px dashed #5F6368;flex:0 0 15px"></span> Connection</div>';
+  }
+  if (role!=='sales' && layer!=='physical'){
+    h+='<div><span class="mk-office" style="width:10px;height:10px;border-width:1px"></span> Office / OLT</div>'+
+       '<div><span style="width:15px;border-top:2px dashed #5F6368;flex:0 0 15px"></span> Service path</div>';
+  }
+  $('legend').innerHTML=h;
+}
+
+/* ---------- popups ---------- */
+function nodePopup(n){
+  var c=cable(n.cable);
+  var h='<h4>'+esc(n.name)+'</h4>'+
+    '<div class="kv"><b>Type:</b> '+typeName(n.type)+'</div>'+
+    (c ? '<div class="kv"><b>On cable:</b> '+esc(n.cable)+' \u00b7 '+c.cores+'F</div>' : '');
+  if (n.type==='FATBOX'){
+    var free=n.ports-usedPorts(n), pf=feedOf(n.id);
+    h+='<div class="kv"><b>Box number:</b> '+esc(n.no)+'</div>'+
+       '<div class="kv"><b>Fed by:</b> '+(pf
+          ? (pf.leg ? esc(pf.node.name)+' \u00b7 '+esc(pf.leg.label)
+                    : esc(n.inCable)+' \u00b7 strand '+n.inStrand)
+          : 'nothing yet')+'</div>'+
+       '<div class="kv"><b>Ports:</b> '+usedPorts(n)+' of '+n.ports+' used</div>'+
+       '<div class="kv"><b>Free:</b> <span class="'+(free?'free':'dim')+'">'+(free?free:'full')+'</span></div>';
+  }
+  if (n.type==='COUPLER'||n.type==='SPLITTER'){
+    var conn=(n.legs||[]).filter(function(g){ return g.to; }).length;
+    h+='<div class="kv"><b>Ratio:</b> '+esc(n.ratio||'\u2014')+'</div>'+
+       '<div class="kv"><b>Fed by:</b> '+(n.inCable
+          ? esc(n.inCable)+' \u00b7 strand '+n.inStrand : '\u2014 not connected')+'</div>'+
+       '<div class="kv"><b>Outputs:</b> '+conn+' of '+(n.legs||[]).length+' connected</div>';
+  }
+  if (n.type==='JOINT')   h+='<div class="kv"><b>Splices:</b> '+splicesAt(n.id).length+'</div>';
+  if (n.note) h+='<div class="kv dim" style="margin-top:5px">'+esc(n.note)+'</div>';
+  if (role==='eng') h+='<div style="margin-top:9px"><button class="btn sm" id="popOpen">Open</button></div>';
+  popAt(n.at,h);
+  var b=document.querySelector('#popOpen');
+  if (b) b.onclick=function(){ if(popup)popup.remove(); sel.node=n.id; view='node'; draw(); render(); };
+}
+function officePopup(o){
+  var mine=D.olts.filter(function(x){ return x.office===o.id; });
+  var h='<h4>'+esc(o.name)+'</h4>';
+  mine.forEach(function(ol){
+    var ps=D.ports.filter(function(p){ return p.olt===ol.id; });
+    h+='<div class="kv"><b>'+esc(ol.name)+':</b> '+
+       ps.filter(function(p){return p.cable;}).length+' of '+ps.length+' ports connected</div>';
+  });
+  h+='<div class="kv dim" style="margin-top:5px">No cable belongs to this office.</div>';
+  popAt(o.at,h);
+}
+
+/* ============================================================
+   PANEL
+   ============================================================ */
+function render(){
+  var b=$('body'), f=$('foot');
+  b.innerHTML=''; f.innerHTML='';
+  ctx();
+  hint(custDraft
+    ? 'Click the map where this customer is \u2014 the building, not the box'
+    : draft ? (draft.kind==='office'
+        ? 'Click the map where the office is'
+      : draft.kind==='route'
+        ? 'Click the map to drop each bend, then press Finish'
+        : draft.type==='FATBOX'
+          ? 'Click the map where the FAT box actually hangs'
+          : 'Click the map near cable '+draft.cable+' to place it') : '');
+
+  if (role==='sales') return salesView(b,f);
+  if (draft && draft.kind==='office') return officeDraft(b,f);
+  if (draft && draft.kind==='route') return routeDraft(b,f);
+  if (draft && draft.kind==='node')  return nodeDraft(b,f);
+  if (view==='cable')   return cableView(b,f);
+  if (view==='node')    return nodeView(b,f);
+  if (view==='splice')  return spliceView(b,f);
+  if (view==='pickstrand') return pickStrandView(b,f);
+  if (view==='pickleg')    return pickLegView(b,f);
+  if (view==='customer')   return customerView(b,f);
+  if (view==='office')  return officeView(b,f);
+  if (view==='editOffice') return editOfficeView(b,f);
+  if (view==='olt')     return oltView(b,f);
+  if (view==='port')    return portView(b,f);
+  if (view==='summary') return summaryView(b,f);
+  if (view==='nearby')  return nearbyView(b,f);
+  if (view==='editCable') return editCable(b,f);
+  if (view==='editNode')  return editNode(b,f);
+  return home(b,f);
+}
+
+var CRUMB={
+  home:'Network', office:'Network \u203a Office', olt:'Network \u203a Office \u203a OLT',
+  port:'Network \u203a Office \u203a OLT \u203a Port', cable:'Network \u203a Cable',
+  node:'Network \u203a Cable \u203a Object', splice:'Network \u203a Joint \u203a Splice',
+  pickstrand:'Network \u203a Object \u203a Feed', pickleg:'Network \u203a Object \u203a Output',
+  customer:'Network \u203a FAT box \u203a Customer', summary:'Network \u203a Summary',
+  editOffice:'Network \u203a Office \u203a Edit',
+  nearby:'Network \u203a Search nearby', editCable:'Network \u203a Cable \u203a Edit',
+  editNode:'Network \u203a Object \u203a Edit'
+};
+
+function ctx(){
+  var c=$('ctx');
+  if (role==='sales'){
+    c.innerHTML='<div class="ctx__row"><span class="ctx__k">View</span><span class="ctx__v">Sales</span></div>'+
+      '<div class="ctx__row"><span class="ctx__k">From</span><span class="ctx__v'+(salesPoint?'':' none')+'">'+
+      (salesPoint? salesPoint[1].toFixed(5)+', '+salesPoint[0].toFixed(5) : 'tap the map')+'</span></div>';
+    return;
+  }
+  var where = draft ? (draft.kind==='office' ? 'Network \u203a New office' : 'Network \u203a New cable')
+            : custDraft ? CRUMB.customer
+            : (CRUMB[view] || 'Network');
+  c.innerHTML='<div class="ctx__row"><span class="ctx__k">Where</span>'+
+      '<span class="ctx__v">'+where+'</span></div>'+
+    '<div class="ctx__row"><span class="ctx__k">Holding</span><span class="ctx__v'+
+      (D.cables.length?'':' none')+'">'+
+      (D.cables.length
+        ? D.offices.length+' offices \u00b7 '+D.cables.length+' cables \u00b7 '+
+          D.nodes.length+' objects'
+        : 'nothing yet')+'</span></div>';
+}
+
+/* One view. Everything visible at once \u2014 no hidden modes to get lost in. */
+
+/* ---------- home ---------- */
+function home(b,f){
+  /* ---- the build order: offices first, always ---- */
+  if (true){
+    var l2=document.createElement('div');
+    l2.className='lbl';
+    l2.innerHTML='Step 1 \u00b7 Offices <span class="r">'+D.offices.length+'</span>';
+    b.appendChild(l2);
+
+    var lead=document.createElement('p');
+    lead.className='lead';
+    lead.innerHTML='Everything starts at an office. Add one, put an OLT in it, add ports, '+
+      'then draw the cable that leaves a port.';
+    b.appendChild(lead);
+
+    D.offices.forEach(function(o){
+      var olts=D.olts.filter(function(x){ return x.office===o.id; });
+      var ports=D.ports.filter(function(p){
+        return olts.some(function(x){ return x.id===p.olt; }); });
+      var r=document.createElement('div');
+      r.className='row';
+      r.innerHTML='<span class="mk-office" style="width:11px;height:11px;border-width:1px"></span>'+
+        '<span class="rowmain"><b>'+esc(o.name)+'</b><div class="sub">'+
+        olts.length+(olts.length===1?' OLT':' OLTs')+' \u00b7 '+ports.length+' ports</div></span>'+
+        '<span class="meta">'+ports.filter(function(p){return p.cable;}).length+' in use</span>';
+      var ob=document.createElement('span'); ob.className='rowbtns';
+      var oe=document.createElement('button');
+      oe.className='ic'; oe.textContent='\u270E'; oe.title='Rename or move';
+      oe.onclick=function(e){ e.stopPropagation(); sel.office=o.id; view='editOffice'; render(); };
+      var od=document.createElement('button');
+      od.className='ic del'; od.textContent='\u00D7'; od.title='Delete';
+      od.onclick=function(e){ e.stopPropagation(); delOffice(o); };
+      ob.appendChild(oe); ob.appendChild(od);
+      r.appendChild(ob);
+
+      r.onclick=function(){ sel.office=o.id; view='office'; draw(); render();
+        map.easeTo({ center:o.at, zoom:Math.max(map.getZoom(),15), duration:500 }); };
+      b.appendChild(r);
+    });
+
+    if (!D.offices.length){
+      var e0=document.createElement('div');
+      e0.className='note';
+      e0.textContent='Nothing here yet. Add an office to begin.';
+      b.appendChild(e0);
+    }
+
+    var ao=document.createElement('button');
+    ao.className='btn primary'; ao.style.width='100%'; ao.textContent='+  Add an office';
+    ao.onclick=function(){
+      draft={ kind:'office', at:null, name:'' };
+      view='home'; draw(); render();
+    };
+    b.appendChild(ao);
+  }
+
+  /* ---- cables are the result of that flow, not a starting point ---- */
+  if (true){
+    var l1=document.createElement('div');
+    l1.className='lbl';
+    l1.innerHTML='Cables in the ground <span class="r">'+D.cables.length+'</span>';
+    b.appendChild(l1);
+
+    if (!D.cables.length){
+      var e1=document.createElement('div');
+      e1.className='note';
+      e1.textContent='No cable yet. A cable is drawn out of an OLT port, or branched from a joint.';
+      b.appendChild(e1);
+    }
+
+    D.cables.forEach(function(c){
+      var r=document.createElement('div');
+      r.className='row'+(sel.cable===c.id?' on':'');
+      r.innerHTML='<span class="cabledash"></span>'+
+        '<span class="rowmain"><b>'+esc(c.id)+'</b>'+
+        '<div class="sub">'+esc(c.kind)+' \u00b7 '+c.cores+'F \u00b7 '+fmtM(pathLen(c.path))+
+        ' \u00b7 '+freeCount(c)+' free</div></span>';
+      var bts=document.createElement('span'); bts.className='rowbtns';
+      bts.innerHTML='<button class="ic" title="Edit">\u270E</button>'+
+                    '<button class="ic del" title="Delete">\u00D7</button>';
+      bts.children[0].onclick=function(e){ e.stopPropagation(); sel.cable=c.id; view='editCable'; render(); };
+      bts.children[1].onclick=function(e){ e.stopPropagation(); delCable(c); };
+      r.appendChild(bts);
+      r.onclick=function(){ sel.cable=c.id; sel.olt=null; view='cable'; draw(); render(); zoomTo(c.path); };
+      b.appendChild(r);
+    });
+
+    var hint2=document.createElement('div');
+    hint2.className='note';
+    hint2.innerHTML='To add a cable, open an <b>office \u2192 OLT \u2192 port</b> and draw it '+
+      'from there, or open a <b>joint</b> and branch a new one off it. A cable never starts '+
+      'from nowhere.';
+    b.appendChild(hint2);
+  }
+
+  var sn=document.createElement('button');
+  sn.className='btn'; sn.textContent='Search nearby';
+  sn.onclick=function(){ salesPoint=null; view='nearby'; draw(); render(); };
+  f.appendChild(sn);
+
+  var s2=document.createElement('button');
+  s2.className='btn'; s2.textContent='Summary';
+  s2.onclick=function(){ view='summary'; render(); };
+  f.appendChild(s2);
+}
+
+function zoomTo(path){
+  var bb=new maplibregl.LngLatBounds(path[0],path[0]);
+  path.forEach(function(p){ bb.extend(p); });
+  map.fitBounds(bb,{padding:90,duration:600});
+}
+
+/* ---------- add a cable: draw the route ---------- */
+function startRoute(){
+  draft={ kind:'route', path:[], id:nextId('F',D.cables), cores:12, kindName:'Distribution', note:'' };
+  view='home'; draw(); render();
+}
+function routeDraft(b,f){
+  var fromPort = draft.fromPort
+    ? D.ports.filter(function(x){ return x.id===draft.fromPort; })[0] : null;
+  var fromOff = fromPort ? office(olt(fromPort.olt).office) : null;
+  var fromNode = draft.fromNode ? node(draft.fromNode) : null;
+  var anchorName = fromOff ? fromOff.name : fromNode ? fromNode.name : '';
+
+  b.innerHTML='<h2 class="title">New cable</h2>'+
+    '<p class="lead">'+(fromOff
+      ? 'Starting at <b>'+esc(fromOff.name)+'</b>, because it leaves '+
+        esc(olt(fromPort.olt).name)+' \u00b7 '+esc(fromPort.name)+'. '+
+        'Click the map for each bend, then the end.'
+      : fromNode
+        ? 'Branching from <b>'+esc(fromNode.name)+'</b>. Click the map for each bend, '+
+          'then the end. You splice it to the other cables inside the joint afterwards.'
+        : 'Click the map for the start, each bend, then the end.')+'</p>'+
+    '<div class="field"><label>Cable ID <i>*</i></label><input id="d_id" value="'+esc(draft.id)+'"></div>'+
+    '<div class="two"><div class="field"><label>Cores <i>*</i></label><select id="d_cores">'+
+      CORE_OPTIONS.map(function(n){ return '<option'+(n===draft.cores?' selected':'')+'>'+n+'</option>'; }).join('')+
+    '</select></div><div class="field"><label>Type</label><select id="d_kind">'+
+      ['Feeder','Distribution','Drop'].map(function(k){
+        return '<option'+(k===draft.kindName?' selected':'')+'>'+k+'</option>'; }).join('')+
+    '</select></div></div>'+
+    '<div class="field"><label>Note</label><input id="d_note" value="'+esc(draft.note)+'" placeholder="optional"></div>';
+
+  var l=document.createElement('div');
+  l.className='lbl';
+  l.innerHTML='Points <span class="r">'+draft.path.length+
+    (draft.path.length>1?' \u00b7 '+fmtM(pathLen(draft.path)):'')+'</span>';
+  b.appendChild(l);
+
+  if (!draft.path.length){
+    var e=document.createElement('div');
+    e.className='note'; e.textContent='Nothing yet. Click the map to drop the first point.';
+    b.appendChild(e);
+  }
+  draft.path.forEach(function(p,i){
+    var locked = (i===0 && (!!draft.fromPort || !!draft.fromNode));
+    var r=document.createElement('div');
+    r.className='row';
+    r.innerHTML='<span class="'+(locked?'mk-office':'mk-vtx')+
+      '" style="width:9px;height:9px;flex:0 0 9px'+(locked?';border-width:1px':'')+'"></span>'+
+      '<span class="rowmain"><b>'+(locked?'Start \u00b7 '+esc(anchorName)
+        : i===0?'Start' : i===draft.path.length-1?'End':'Bend '+i)+'</b>'+
+      '<div class="sub">'+p[1].toFixed(5)+', '+p[0].toFixed(5)+
+      (locked?(fromOff?' \u00b7 fixed at the office':' \u00b7 fixed at the joint'):'')+
+      '</div></span>';
+    if (!locked){
+      var x=document.createElement('button');
+      x.className='ic del'; x.textContent='\u00D7'; x.style.marginLeft='auto';
+      x.onclick=function(ev){ ev.stopPropagation(); draft.path.splice(i,1); draw(); render(); };
+      r.appendChild(x);
+    }
+    b.appendChild(r);
+  });
+
+  ['d_id','d_cores','d_kind','d_note'].forEach(function(id){
+    var el=$(id); if(!el) return;
+    el.onchange=function(){
+      draft.id=$('d_id').value.trim();
+      draft.cores=parseInt($('d_cores').value,10);
+      draft.kindName=$('d_kind').value;
+      draft.note=$('d_note').value;
+    };
+  });
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ draft=null; draw(); render(); };
+
+  var done=document.createElement('button');
+  done.className='btn primary'; done.textContent='Finish cable';
+  done.disabled=draft.path.length<2;
+  done.onclick=function(){
+    draft.id=$('d_id').value.trim();
+    draft.cores=parseInt($('d_cores').value,10);
+    draft.kindName=$('d_kind').value;
+    draft.note=$('d_note').value;
+    if (!draft.id || cable(draft.id)){ alert('Cable ID is blank or already used.'); return; }
+    D.cables.push({ id:draft.id, cores:draft.cores, kind:draft.kindName,
+                    note:draft.note, path:draft.path.slice() });
+    // a cable drawn from a port is immediately carried by strand 1 of it
+    if (fromPort){ fromPort.cable=draft.id; fromPort.strand=1; }
+    sel.cable=draft.id; draft=null; view='cable'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(done);
+}
+
+/* ---------- add plant on a cable ---------- */
+function startNode(type, cableId){
+  draft={ kind:'node', type:type, cable:cableId, at:null, off:0,
+          name:nextId(type==='JOINT'?'JE':type==='COUPLER'?'CP':type==='SPLITTER'?'SP':'FB', D.nodes),
+          ratio:(type==='SPLITTER'?'1:8':'40/60'), no:'', ports:16, note:'' };
+  draw(); render();
+}
+function nodeDraft(b,f){
+  var t=draft.type;
+  var title='New '+typeName(t).toLowerCase();
+  b.innerHTML='<h2 class="title">'+title+'</h2>'+
+    '<p class="lead">'+(t==='FATBOX'
+      ? 'Click the map anywhere \u2014 on a pole or a wall, wherever the box actually is. '+
+        'You connect what feeds it afterwards.'
+      : 'On cable '+esc(draft.cable)+'. Click the map \u2014 it snaps onto the cable.'+
+        (t==='COUPLER'||t==='SPLITTER' ? ' You connect its input and outputs after placing it.' : ''))+'</p>'+
+    '<div class="field"><label>Name <i>*</i></label><input id="n_name" value="'+esc(draft.name)+'"></div>'+
+    (t==='COUPLER' ? '<div class="field"><label>Split ratio <i>*</i></label><select id="n_val">'+
+        COUPLER_VALUES.map(function(v){
+          return '<option value="'+v.ratio+'"'+(v.ratio===draft.ratio?' selected':'')+'>'+
+                 v.ratio+' \u00b7 tap '+v.tap+'% / pass '+v.pass+'%</option>'; }).join('')+
+      '</select><div class="msg">Two outputs: a small tap here, the rest carried onward.</div></div>' : '')+
+    (t==='SPLITTER' ? '<div class="field"><label>Split ratio <i>*</i></label><select id="n_val">'+
+        SPLITTER_TYPES.map(function(v){
+          return '<option value="'+v.ratio+'"'+(v.ratio===draft.ratio?' selected':'')+'>'+
+                 v.ratio+' \u00b7 '+v.ways+' equal outputs \u00b7 \u2212'+v.loss+' dB each</option>'; }).join('')+
+      '</select><div class="msg">Every output gets an equal share of the light.</div></div>' : '')+
+    (t==='FATBOX' ? '<div class="two"><div class="field"><label>Box number <i>*</i></label>'+
+        '<input id="n_no" inputmode="numeric" maxlength="3" placeholder="1 to 999" value="'+esc(draft.no)+'"></div>'+
+        '<div class="field"><label>Ports</label><select id="n_ports">'+
+        [4,8,16,24].map(function(n){ return '<option'+(n===draft.ports?' selected':'')+'>'+n+'</option>'; }).join('')+
+      '</select></div></div><div class="msg" id="n_msg"></div>' : '')+
+    '<div class="field"><label>Note</label><input id="n_note" value="'+esc(draft.note)+'" placeholder="optional"></div>'+
+    '<div class="lbl">Position</div>'+
+    '<div class="note">'+(draft.at
+      ? 'Placed at '+draft.at[1].toFixed(5)+', '+draft.at[0].toFixed(5)+
+        (draft.off===null ? '' : ' \u00b7 snapped '+Math.round(draft.off)+' m onto the cable')
+      : 'Not placed yet. Click the map.')+'</div>';
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ draft=null; draw(); render(); };
+
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Place '+typeName(t).toLowerCase();
+  save.disabled=!draft.at;
+  save.onclick=function(){
+    var name=$('n_name').value.trim();
+    if (!name){ alert('Name is required.'); return; }
+    var rec={ id:name, type:t, cable:draft.cable, at:draft.at, name:name,
+              note:$('n_note').value.trim() };
+    if (t==='COUPLER'||t==='SPLITTER'){
+      rec.ratio=$('n_val').value;
+      rec.inCable=null; rec.inStrand=null;
+      rec.legs=makeLegs(t, rec.ratio);
+    }
+    if (t==='FATBOX'){
+      var raw=$('n_no').value.replace(/[^0-9]/g,'');
+      var n=parseInt(raw,10);
+      if (!(n>=1&&n<=999)){ $('n_msg').className='msg bad'; $('n_msg').textContent='Box number must be 1 to 999.'; return; }
+      var code=('00'+n).slice(-3);
+      if (D.nodes.some(function(x){ return x.type==='FATBOX'&&x.no===code; })){
+        $('n_msg').className='msg bad'; $('n_msg').textContent='FAT box '+code+' already exists.'; return;
+      }
+      rec.no=code; rec.ports=parseInt($('n_ports').value,10);
+      rec.customers=[]; rec.cable=null; rec.inCable=null; rec.inStrand=null;
+    }
+    if (node(rec.id)){ alert('That name is already used.'); return; }
+    D.nodes.push(rec);
+    draft=null; sel.node=rec.id; view='node'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(save);
+}
+
+/* ---------- cable detail ---------- */
+function cableView(b,f){
+  var c=cable(sel.cable);
+  if (!c){ view='home'; return render(); }
+  var uses=strandUses(c.id);
+  var usedN=0, halfN=0;
+  for (var si=1;si<=c.cores;si++){
+    var k=strandEndsUsed(uses,si);
+    if (k>0) usedN++;
+    if (k===1) halfN++;
+  }
+
+  b.innerHTML='<h2 class="title">'+esc(c.id)+'</h2>'+
+    '<p class="lead">'+esc(c.kind)+' \u00b7 '+c.cores+' cores \u00b7 '+fmtM(pathLen(c.path))+
+    ' \u00b7 '+(c.path.length-2)+' bends</p>'+
+    (c.note?'<div class="kv dim">'+esc(c.note)+'</div>':'')+
+    '<div class="cap"><i style="width:'+Math.round(usedN/c.cores*100)+'%"></i></div>'+
+    '<div class="kv" style="margin-top:5px"><b>'+usedN+'</b> of '+c.cores+' strands in use \u00b7 '+
+    '<span class="free">'+(c.cores-usedN)+' spare</span></div>';
+
+  /* Devices sit on the cable. FAT boxes hang off it, wherever they were placed. */
+  var onIt=nodesOn(c.id);
+  var hangingOff=D.nodes.filter(function(n){
+    if (n.type!=='FATBOX') return false;
+    if (n.inCable===c.id) return true;
+    var fd=feedOf(n.id);
+    return !!(fd && fd.node && fd.node.cable===c.id && fd.leg);
+  });
+
+  var l1=document.createElement('div');
+  l1.className='lbl';
+  l1.innerHTML='On this cable <span class="r">'+(onIt.length+hangingOff.length)+'</span>';
+  b.appendChild(l1);
+
+  onIt.concat(hangingOff).forEach(function(n){
+    var r=document.createElement('div');
+    r.className='row';
+    var cls=markerClass(n.type);
+    var extra = n.type==='FATBOX' ? (n.ports-usedPorts(n)?(n.ports-usedPorts(n))+' free':'full')
+              : n.type==='JOINT' ? splicesAt(n.id).length+' splices'
+              : (n.legs||[]).filter(function(g){ return g.to; }).length+'/'+(n.legs||[]).length+' out';
+    r.innerHTML='<span class="'+cls+'" style="'+
+      (n.type==='COUPLER' ? 'border-left-width:5px;border-right-width:5px;border-bottom-width:9px'
+       : n.type==='SPLITTER' ? 'border-left-width:5px;border-right-width:5px;border-top-width:9px'
+       : 'width:11px;height:11px;border-width:1px')+';flex:0 0 11px"></span>'+
+      '<span class="rowmain"><b>'+esc(n.name)+'</b><div class="sub">'+
+      (n.type==='FATBOX' ? 'FAT box '+esc(n.no)
+       : n.type==='JOINT' ? 'Joint enclosure'
+       : typeName(n.type)+' '+esc(n.ratio||''))+
+      '</div></span><span class="meta">'+esc(extra)+'</span>';
+    r.onclick=function(){ sel.node=n.id; view='node'; draw(); render();
+      map.easeTo({center:n.at, zoom:17, duration:600}); };
+    b.appendChild(r);
+  });
+
+  var addrow=document.createElement('div');
+  addrow.className='chips'; addrow.style.marginTop='8px';
+  [['JOINT','+ Joint'],['COUPLER','+ Coupler'],['SPLITTER','+ Splitter'],
+   ['FATBOX','+ FAT box']].forEach(function(p){
+    var btn=document.createElement('button');
+    btn.className='chip'; btn.textContent=p[1];
+    btn.onclick=function(){ startNode(p[0], c.id); };
+    addrow.appendChild(btn);
+  });
+  b.appendChild(addrow);
+
+  var l2=document.createElement('div');
+  l2.className='lbl';
+  l2.innerHTML='Strands <span class="r">'+usedN+' of '+c.cores+' touched'+
+    (halfN?' \u00b7 '+halfN+' half done':'')+'</span>';
+  b.appendChild(l2);
+
+  var tb=document.createElement('table');
+  tb.className='tbl';
+  var rows='';
+  for (var i=1;i<=c.cores;i++){
+    var st=strandStatus(uses,i);
+    var chain=strandChain(uses,i);
+    rows+='<tr><td style="width:20px">'+swatch(i)+'</td>'+
+      '<td>'+strandLabel(i,c.cores)+'</td>'+
+      '<td class="'+st.cls+'">'+esc(st.text)+
+      (chain && strandEndsUsed(uses,i)>1
+        ? '<div style="font-size:11px;color:#5F6368">'+esc(chain)+'</div>' : '')+
+      '</td></tr>';
+  }
+  tb.innerHTML='<thead><tr><th></th><th>Strand</th><th>Runs between</th></tr></thead><tbody>'+rows+'</tbody>';
+  b.appendChild(tb);
+
+  if (halfN){
+    var hn=document.createElement('div');
+    hn.className='note';
+    hn.innerHTML='<b>'+halfN+'</b> strand'+(halfN===1?' has':'s have')+' just one thing on '+
+      (halfN===1?'it':'them')+'. Light arrives but nothing collects it yet, so '+
+      (halfN===1?'that strand is':'those strands are')+' still open further along the cable.';
+    b.appendChild(hn);
+  }
+
+  var owners={};
+  portsUsing(c.id).forEach(function(p){ owners[olt(p.olt).name]=1; });
+  if (Object.keys(owners).length>1){
+    var n=document.createElement('div');
+    n.className='note';
+    n.innerHTML='Carries strands for <b>'+Object.keys(owners).join('</b>, <b>')+
+      '</b>. It belongs to none of them.';
+    b.appendChild(n);
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ sel.cable=null; view='home'; draw(); render(); };
+  var ed=document.createElement('button');
+  ed.className='btn primary'; ed.textContent='Edit';
+  ed.onclick=function(){ view='editCable'; render(); };
+  f.appendChild(back); f.appendChild(ed);
+}
+
+/* ---------- node detail ---------- */
+function nodeView(b,f){
+  var n=node(sel.node);
+  if (!n){ view='home'; return render(); }
+  var c=cable(n.cable);
+
+  b.innerHTML='<h2 class="title">'+esc(n.name)+'</h2>'+
+    '<p class="lead">'+typeName(n.type)+
+    (n.ratio?' '+esc(n.ratio):'')+
+    (n.type==='FATBOX'
+      ? (n.no ? ' \u00b7 box '+esc(n.no) : '')
+      : ' \u00b7 on '+esc(n.cable)+' ('+(c?c.cores:'?')+'F)')+'</p>'+
+    (n.note?'<div class="kv dim">'+esc(n.note)+'</div>':'');
+
+  if (n.type==='FATBOX'){
+    var used=usedPorts(n), free=n.ports-used, fd=feedOf(n.id);
+
+    b.innerHTML+='<div class="lbl">Fed by</div>';
+    var fRow=document.createElement('div');
+    fRow.className='row';
+    fRow.innerHTML = fd
+      ? (fd.leg
+          ? '<span class="'+markerClass(fd.node.type)+'" style="'+
+            (fd.node.type==='COUPLER'?'border-left-width:5px;border-right-width:5px;border-bottom-width:9px'
+             :'border-left-width:5px;border-right-width:5px;border-top-width:9px')+';flex:0 0 11px"></span>'+
+            '<span class="rowmain"><b>'+esc(fd.node.name)+'</b><div class="sub">'+esc(fd.leg.label)+'</div></span>'
+          : swatch(n.inStrand)+'<span class="rowmain"><b>'+esc(n.inCable)+'</b><div class="sub">strand '+
+            strandLabel(n.inStrand, cable(n.inCable).cores)+' \u2014 straight from the cable</div></span>')
+      : '<span class="swatch" style="background:#EDEFF1"></span>'+
+        '<span class="rowmain"><b class="dim">Nothing yet</b><div class="sub">connect a strand, '+
+        'or point a coupler or splitter output at this box</div></span>';
+    var fBtn=document.createElement('button');
+    fBtn.className='btn sm'; fBtn.style.marginLeft='auto';
+    fBtn.textContent = fd ? 'Change' : 'Connect';
+    fBtn.onclick=function(){ legPick={ node:n.id, leg:'__in' }; view='pickstrand'; render(); };
+    fRow.appendChild(fBtn);
+    b.appendChild(fRow);
+
+    var pl=document.createElement('div');
+    pl.className='lbl';
+    pl.innerHTML='Ports <span class="r">'+used+' of '+n.ports+' used \u00b7 '+
+      '<span class="'+(free?'free':'dim')+'">'+(free?free+' free':'full')+'</span></span>';
+    b.appendChild(pl);
+
+    var capd=document.createElement('div');
+    capd.className='cap';
+    capd.innerHTML='<i style="width:'+Math.round(used/n.ports*100)+'%"></i>';
+    b.appendChild(capd);
+
+    for (var p=1;p<=n.ports;p++){
+      (function(port){
+        var cust=customerOn(n, port);
+        var r=document.createElement('div');
+        r.className='row'; r.style.cursor='default'; r.style.marginTop=port===1?'9px':'';
+        r.innerHTML='<span style="font:600 11px ui-monospace,Menlo,monospace;color:#5F6368;'+
+          'width:22px;flex:0 0 22px">'+String(port).padStart(2,'0')+'</span>'+
+          '<span class="rowmain">'+(cust
+            ? '<b>'+esc(cust.name)+'</b><div class="sub">connected</div>'
+            : '<b class="dim">Free</b><div class="sub">no customer on this port</div>')+'</span>';
+        var btn=document.createElement('button');
+        btn.className = cust ? 'ic del' : 'btn sm';
+        btn.style.marginLeft='auto';
+        btn.textContent = cust ? '\u00D7' : 'Connect';
+        btn.title = cust ? 'Disconnect this customer' : '';
+        btn.onclick=function(){
+          if (cust){
+            if (!confirm('Disconnect '+cust.name+' from port '+port+'?')) return;
+            n.customers=n.customers.filter(function(x){ return x.port!==port; });
+            draw(); render();
+          } else {
+            custDraft={ node:n.id, port:port, at:null, name:'' };
+            view='customer'; draw(); render();
+          }
+        };
+        r.appendChild(btn);
+        b.appendChild(r);
+      })(p);
+    }
+
+    var fn=document.createElement('div');
+    fn.className='note';
+    fn.innerHTML='Each port is one drop cable to one customer\u2019s ONT. This is the last '+
+      'link in the chain \u2014 the point where the network becomes somebody\u2019s internet.';
+    b.appendChild(fn);
+  }
+
+  if (n.type==='COUPLER'||n.type==='SPLITTER'){
+    var spec = n.type==='COUPLER' ? couplerSpec(n.ratio) : splitterSpec(n.ratio);
+
+    /* --- the input --- */
+    var li=document.createElement('div');
+    li.className='lbl'; li.textContent='Light comes in on';
+    b.appendChild(li);
+
+    var inRow=document.createElement('div');
+    inRow.className='row';
+    var upstream = legFeedOf(n.id);
+    inRow.innerHTML = n.inCable
+      ? swatch(n.inStrand)+'<span class="rowmain"><b>'+esc(n.inCable)+'</b><div class="sub">strand '+
+        strandLabel(n.inStrand, cable(n.inCable).cores)+'</div></span>'
+      : upstream
+        ? '<span class="'+markerClass(upstream.node.type)+'" style="'+
+          (upstream.node.type==='COUPLER'?'border-left-width:5px;border-right-width:5px;border-bottom-width:9px'
+           :'border-left-width:5px;border-right-width:5px;border-top-width:9px')+';flex:0 0 11px"></span>'+
+          '<span class="rowmain"><b>'+esc(upstream.node.name)+'</b><div class="sub">'+
+          esc(upstream.leg.label)+' \u2014 chained from another device</div></span>'
+        : '<span class="swatch" style="background:#EDEFF1"></span>'+
+          '<span class="rowmain"><b class="dim">Not connected</b><div class="sub">pick the strand that feeds this device</div></span>';
+    if (!upstream){
+      var inBtn=document.createElement('button');
+      inBtn.className='btn sm'; inBtn.style.marginLeft='auto';
+      inBtn.textContent = n.inCable ? 'Change' : 'Connect';
+      inBtn.onclick=function(){ legPick={ node:n.id, leg:'__in' }; view='pickstrand'; render(); };
+      inRow.appendChild(inBtn);
+    }
+    b.appendChild(inRow);
+
+    /* --- the outputs --- */
+    var lo=document.createElement('div');
+    lo.className='lbl';
+    lo.innerHTML='Light goes out by <span class="r">'+
+      n.legs.filter(function(g){ return g.to; }).length+' of '+n.legs.length+' connected</span>';
+    b.appendChild(lo);
+
+    n.legs.forEach(function(g){
+      var r=document.createElement('div');
+      r.className='row';
+      r.innerHTML='<span class="rowmain"><b>'+esc(g.label)+'</b><div class="sub">'+
+        (g.to ? '\u2192 '+esc(legTarget(g.to)) : '<span class="dim">not connected</span>')+
+        ' \u00b7 \u2212'+g.loss.toFixed(2)+' dB</div></span>';
+      var bts=document.createElement('span'); bts.className='rowbtns';
+      var cbtn=document.createElement('button');
+      cbtn.className='btn sm'; cbtn.textContent=g.to?'Change':'Connect';
+      cbtn.onclick=function(){ legPick={ node:n.id, leg:g.id }; view='pickleg'; render(); };
+      bts.appendChild(cbtn);
+      if (g.to){
+        var x=document.createElement('button');
+        x.className='ic del'; x.textContent='\u00D7'; x.title='Disconnect';
+        x.onclick=function(){ g.to=null; draw(); render(); };
+        bts.appendChild(x);
+      }
+      r.appendChild(bts);
+      b.appendChild(r);
+    });
+
+    var nn=document.createElement('div');
+    nn.className='note';
+    nn.innerHTML = n.type==='COUPLER'
+      ? 'A coupler splits light <b>unevenly</b>. The tap serves something here; the pass carries '+
+        'the rest onward to the next device down the street.'
+      : 'A splitter divides light <b>evenly</b> into '+spec.ways+' outputs, each losing '+
+        spec.loss+' dB. Every output can feed a FAT box or continue in a strand.';
+    b.appendChild(nn);
+  }
+
+  if (n.type==='JOINT'){
+    var sp=splicesAt(n.id);
+    var l=document.createElement('div');
+    l.className='lbl'; l.innerHTML='Splices <span class="r">'+sp.length+'</span>';
+    b.appendChild(l);
+
+    if (!sp.length){
+      var e=document.createElement('div');
+      e.className='note'; e.textContent='Nothing joined here yet. Cables pass each other untouched.';
+      b.appendChild(e);
+    } else {
+      var tb=document.createElement('table'); tb.className='tbl';
+      tb.innerHTML='<thead><tr><th>In</th><th>Out</th><th></th></tr></thead><tbody>'+
+        sp.map(function(s){
+          var ca=cable(s.aCable), cb=cable(s.bCable);
+          return '<tr><td>'+swatch(s.aStrand)+' '+esc(s.aCable)+' \u00b7 '+strandLabel(s.aStrand,ca.cores)+'</td>'+
+            '<td>'+swatch(s.bStrand)+' '+esc(s.bCable)+' \u00b7 '+strandLabel(s.bStrand,cb.cores)+'</td>'+
+            '<td style="width:26px"><button class="ic del" data-s="'+s.id+'">\u00D7</button></td></tr>';
+        }).join('')+'</tbody>';
+      b.appendChild(tb);
+      [].slice.call(tb.querySelectorAll('.ic.del')).forEach(function(btn){
+        btn.onclick=function(){
+          D.splices=D.splices.filter(function(x){ return x.id!==btn.dataset.s; });
+          draw(); render();
+        };
+      });
+    }
+
+    var branch=document.createElement('button');
+    branch.className='btn soft'; branch.style.cssText='width:100%;margin-top:9px';
+    branch.textContent='+  Branch a new cable from here';
+    branch.onclick=function(){
+      draft={ kind:'route', path:[n.at.slice()], id:nextId('F',D.cables),
+              cores:12, kindName:'Distribution', note:'', fromNode:n.id };
+      draw(); render();
+    };
+    b.appendChild(branch);
+
+    var addsp=document.createElement('button');
+    addsp.className='btn soft'; addsp.style.cssText='width:100%;margin-top:9px';
+    addsp.textContent='+  Splice strands here';
+    addsp.onclick=function(){
+      pick=null;
+      // default: this joint's own cable on the left, the first other cable on the right
+      var others=D.cables.filter(function(c){ return c.id!==n.cable; });
+      spliceSel={ a:n.cable, b:(others[0]||cable(n.cable)).id };
+      view='splice'; render();
+    };
+    b.appendChild(addsp);
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ sel.node=null; view=sel.cable?'cable':'home'; draw(); render(); };
+  var ed=document.createElement('button');
+  ed.className='btn primary'; ed.textContent='Edit';
+  ed.onclick=function(){ view='editNode'; render(); };
+  var del=document.createElement('button');
+  del.className='btn danger'; del.textContent='Delete';
+  del.onclick=function(){
+    if (!confirm('Delete '+n.name+'?')) return;
+    D.nodes=D.nodes.filter(function(x){ return x.id!==n.id; });
+    D.splices=D.splices.filter(function(x){ return x.joint!==n.id; });
+    D.nodes.forEach(function(x){
+      if (!x.legs) return;
+      x.legs.forEach(function(g){
+        if (g.to && (g.to.kind==='FATBOX'||g.to.kind==='DEVICE') && g.to.node===n.id) g.to=null;
+      });
+    });
+    sel.node=null; view=sel.cable?'cable':'home'; draw(); render();
+  };
+  f.appendChild(back); f.appendChild(ed); f.appendChild(del);
+}
+
+/* ---------- the splice editor: input strand to output strand ---------- */
+function spliceView(b,f){
+  var j=node(sel.node), here=cable(j.cable);
+  /* cables that physically reach this joint: its own, plus any whose path
+     starts or ends within 40 m of it */
+  /* A joint can be cut into a cable anywhere along its length, so any cable
+     whose route passes close by is available here \u2014 not just ones that end here. */
+  var reach=D.cables.filter(function(c){
+    if (c.id===j.cable) return true;
+    return snapToPath(j.at, c.path).dist < JOINT_REACH_M;
+  });
+
+  b.innerHTML='<h2 class="title">Splice at '+esc(j.name)+'</h2>'+
+    '<p class="lead">Pick a strand on the left, then the strand it joins on the right. '+
+    'Greyed strands are already used.</p>';
+
+  if (reach.length<2){
+    var w=document.createElement('div');
+    w.className='note warn';
+    w.innerHTML='Only <b>'+esc(j.cable)+'</b> reaches this joint. Draw another cable that '+
+      'starts or ends here, then come back.';
+    b.appendChild(w);
+  } else {
+    var g=document.createElement('div');
+    g.className='sgrid';
+    g.appendChild(strandColumn('a', reach, j));
+    g.appendChild(strandColumn('b', reach, j));
+    b.appendChild(g);
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ pick=null; view='node'; render(); };
+  f.appendChild(back);
+}
+
+function strandColumn(side, reach, j){
+  /* j is the joint, so its distance along each cable decides what it can cut */
+  var wrap=document.createElement('div');
+  wrap.className='scol';
+  // the cable this column is showing, remembered across re-renders
+  if (!spliceSel[side] || !reach.some(function(c){ return c.id===spliceSel[side]; })){
+    spliceSel[side] = (side==='a')
+      ? j.cable
+      : (reach.filter(function(c){ return c.id!==j.cable; })[0] || reach[0]).id;
+  }
+  var cid = spliceSel[side];
+
+  var h='<h5>'+(side==='a'?'From':'To')+'</h5><div class="field"><select>'+
+    reach.map(function(c){
+      return '<option value="'+c.id+'"'+(c.id===cid?' selected':'')+'>'+c.id+' \u00b7 '+c.cores+'F</option>';
+    }).join('')+'</select></div><div class="slist"></div>';
+  wrap.innerHTML=h;
+
+  var c=cable(cid), uses=strandUses(cid);
+  var jAlong=snapToPath(j.at, c.path).along;
+  var list=wrap.querySelector('.slist');
+  var html='';
+  for (var i=1;i<=c.cores;i++){
+    var chk=attachCheck(uses,i,jAlong,'EITHER');
+    var st=strandStatus(uses,i), open=chk.ok;
+    var on = pick && pick.side===side && pick.cable===cid && pick.strand===i;
+    html+='<button class="sbtn'+(on?' on':'')+'" data-n="'+i+'"'+(open?'':' disabled')+'>'+
+      swatch(i)+'<span>'+strandLabel(i,c.cores)+'</span>'+
+      (strandEndsUsed(uses,i)?'<small>'+esc(open?st.text:(chk.why||st.text))+'</small>':'')+
+      '</button>';
+  }
+  list.innerHTML=html;
+
+  wrap.querySelector('select').onchange=function(){
+    spliceSel[side]=this.value;
+    if (pick && pick.side===side) pick=null;   // the pending pick was on the old cable
+    render();
+  };
+
+  [].slice.call(list.querySelectorAll('.sbtn')).forEach(function(btn){
+    btn.onclick=function(){
+      var n=parseInt(btn.dataset.n,10);
+      if (!pick || pick.side===side){ pick={ side:side, cable:cid, strand:n }; render(); return; }
+      /* second pick completes the splice */
+      var a = pick.side==='a' ? pick : { cable:cid, strand:n };
+      var bb= pick.side==='a' ? { cable:cid, strand:n } : pick;
+      if (a.cable===bb.cable && a.strand===bb.strand){ pick=null; render(); return; }
+      D.splices.push({ id:'S'+Date.now(), joint:node(sel.node).id,
+                       aCable:a.cable, aStrand:a.strand, bCable:bb.cable, bStrand:bb.strand });
+      pick=null; view='node'; draw(); render();
+    };
+  });
+  return wrap;
+}
+
+/* ---------- place a customer at the end of a drop cable ---------- */
+function customerView(b,f){
+  var n=node(custDraft.node);
+
+  b.innerHTML='<h2 class="title">Connect a customer</h2>'+
+    '<p class="lead">Port '+String(custDraft.port).padStart(2,'0')+' of '+esc(n.name)+
+    '. Click the map where the customer actually is \u2014 the building, not the box \u2014 '+
+    'then give them a name.</p>'+
+    '<div class="field"><label>Customer name or address <i>*</i></label>'+
+    '<input id="cu_name" placeholder="Shah Residence, Flat 4B" value="'+esc(custDraft.name)+'"></div>'+
+    '<div class="msg" id="cu_msg"></div>'+
+    '<div class="lbl">Where they are</div>'+
+    '<div class="note">'+(custDraft.at
+      ? 'Placed at '+custDraft.at[1].toFixed(5)+', '+custDraft.at[0].toFixed(5)+
+        ' \u00b7 drop cable would be '+fmtM(metres(n.at, custDraft.at))+' from '+esc(n.name)
+      : 'Not placed yet. Click the map.')+'</div>';
+
+  $('cu_name').oninput=function(){ custDraft.name=this.value; };
+
+  var others=(n.customers||[]).filter(function(c){ return c.at; });
+  if (others.length){
+    var l=document.createElement('div');
+    l.className='lbl'; l.textContent='Already on this box';
+    b.appendChild(l);
+    others.forEach(function(c){
+      var r=document.createElement('div');
+      r.className='row'; r.style.cursor='pointer';
+      r.innerHTML='<span class="mk-cust" style="width:9px;height:9px;flex:0 0 9px"></span>'+
+        '<span class="rowmain"><b>'+esc(c.name)+'</b><div class="sub">port '+
+        String(c.port).padStart(2,'0')+' \u00b7 '+fmtM(metres(n.at,c.at))+'</div></span>'+
+        '<span class="meta">use this spot</span>';
+      r.onclick=function(){ custDraft.at=c.at.slice(); draw(); render(); };
+      b.appendChild(r);
+    });
+    var nn=document.createElement('div');
+    nn.className='note';
+    nn.innerHTML='Several customers often share one building. Tap one above to reuse its exact spot.';
+    b.appendChild(nn);
+  }
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ custDraft=null; view='node'; draw(); render(); };
+
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Connect';
+  save.disabled=!custDraft.at;
+  save.onclick=function(){
+    var nm=($('cu_name').value||'').trim();
+    if (!nm){ $('cu_msg').className='msg bad'; $('cu_msg').textContent='Give the customer a name.'; return; }
+    n.customers=(n.customers||[]).concat([{ port:custDraft.port, name:nm, at:custDraft.at }]);
+    custDraft=null; view='node'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(save);
+}
+
+/* ---------- pick a strand to feed a device ---------- */
+function pickStrandView(b,f){
+  var n=node(legPick.node);
+
+  /* A FAT box belongs to no cable, so fall back to any cable there is. */
+  if (!pickCable || !cable(pickCable)){
+    pickCable = (cable(n.inCable) && n.inCable) || (cable(n.cable) && n.cable) ||
+                (D.cables[0] && D.cables[0].id) || null;
+  }
+
+  if (!pickCable){
+    b.innerHTML='<h2 class="title">Feed '+esc(n.name)+'</h2>'+
+      '<div class="note warn">There are no cables yet. Draw one first, then come back '+
+      'and pick the strand that feeds this '+typeName(n.type).toLowerCase()+'.</div>';
+    var only=document.createElement('button');
+    only.className='btn'; only.textContent='\u2190 Back';
+    only.onclick=function(){ legPick=null; pickCable=null; view='node'; render(); };
+    f.appendChild(only);
+    return;
+  }
+
+  b.innerHTML='<h2 class="title">Feed '+esc(n.name)+'</h2>'+
+    '<p class="lead">What sends light into this '+typeName(n.type).toLowerCase()+
+    '? Either a spare output on a nearby coupler or splitter, or a strand in a cable.</p>';
+
+  /* --- spare outputs on other devices, nearest first --- */
+  var spare=[];
+  D.nodes.forEach(function(dv){
+    if (dv.id===n.id || !dv.legs) return;
+    dv.legs.forEach(function(g){
+      if (g.to) return;                       // already feeding something
+      spare.push({ node:dv, leg:g, d:metres(dv.at, n.at) });
+    });
+  });
+  spare.sort(function(a,z){ return a.d-z.d; });
+
+  var lo=document.createElement('div');
+  lo.className='lbl';
+  lo.innerHTML='From a device output <span class="r">'+spare.length+' spare</span>';
+  b.appendChild(lo);
+
+  if (!spare.length){
+    var e0=document.createElement('div');
+    e0.className='note';
+    e0.textContent='No coupler or splitter has a spare output. Add one, or feed this from a strand below.';
+    b.appendChild(e0);
+  }
+
+  spare.slice(0,8).forEach(function(sp){
+    var r=document.createElement('div');
+    r.className='row';
+    r.innerHTML='<span class="'+markerClass(sp.node.type)+'" style="'+
+      (sp.node.type==='COUPLER'?'border-left-width:5px;border-right-width:5px;border-bottom-width:9px'
+       :'border-left-width:5px;border-right-width:5px;border-top-width:9px')+';flex:0 0 11px"></span>'+
+      '<span class="rowmain"><b>'+esc(sp.node.name)+'</b><div class="sub">'+
+      esc(sp.leg.label)+' \u00b7 \u2212'+sp.leg.loss.toFixed(2)+' dB</div></span>'+
+      '<span class="meta">'+fmtM(sp.d)+'</span>';
+    r.onclick=function(){
+      /* one thing has one source, so release whatever fed it before */
+      n.inCable=null; n.inStrand=null;
+      var was=legFeedOf(n.id);
+      if (was) was.leg.to=null;
+      sp.leg.to={ kind:(n.type==='FATBOX'?'FATBOX':'DEVICE'), node:n.id };
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+    b.appendChild(r);
+  });
+
+  var ls=document.createElement('div');
+  ls.className='lbl'; ls.textContent='Or straight from a cable strand';
+  b.appendChild(ls);
+
+  var pickWrap=document.createElement('div');
+  pickWrap.innerHTML='<div class="field"><label>Cable</label><select id="pk_c">'+
+    D.cables.map(function(c){
+      return '<option value="'+c.id+'"'+(c.id===pickCable?' selected':'')+'>'+
+             c.id+' \u00b7 '+c.cores+'F</option>'; }).join('')+
+    '</select></div>';
+  b.appendChild(pickWrap);
+
+  var c=cable(pickCable), uses=strandUses(pickCable);
+  var myAlong=snapToPath(n.at, c.path).along;
+  var list=document.createElement('div');
+  list.className='slist';
+  var html='';
+  for (var i=1;i<=c.cores;i++){
+    var st=strandStatus(uses,i);
+    var mine = (n.inCable===pickCable && n.inStrand===i);
+    var chk=attachCheck(uses,i,myAlong,'SINK');
+    var busy = !mine && !chk.ok;
+    html+='<button class="sbtn'+(mine?' on':'')+'" data-n="'+i+'"'+(busy?' disabled':'')+'>'+
+      swatch(i)+'<span>'+strandLabel(i,c.cores)+'</span>'+
+      (strandEndsUsed(uses,i)?'<small>'+esc(busy?(chk.why||'in use here'):st.text)+'</small>':'')+
+      '</button>';
+  }
+  list.innerHTML=html;
+  b.appendChild(list);
+
+  $('pk_c').onchange=function(){ pickCable=this.value; render(); };
+  [].slice.call(list.querySelectorAll('.sbtn')).forEach(function(btn){
+    btn.onclick=function(){
+      var was=legFeedOf(n.id);
+      if (was) was.leg.to=null;            // a strand feed replaces a device feed
+      n.inCable=pickCable; n.inStrand=parseInt(btn.dataset.n,10);
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+  });
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ legPick=null; pickCable=null; view='node'; render(); };
+  f.appendChild(back);
+
+  var upstream=legFeedOf(n.id);
+  if (n.inCable || upstream){
+    var clear=document.createElement('button');
+    clear.className='btn danger'; clear.textContent='Disconnect';
+    clear.onclick=function(){
+      n.inCable=null; n.inStrand=null;
+      if (upstream) upstream.leg.to=null;
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+    f.appendChild(clear);
+  }
+}
+
+/* ---------- pick where a device output goes ---------- */
+function pickLegView(b,f){
+  var n=node(legPick.node);
+  var g=n.legs.filter(function(x){ return x.id===legPick.leg; })[0];
+  if (!pickCable || !cable(pickCable)){
+    pickCable = (g.to && g.to.kind==='CABLE' && cable(g.to.cable) && g.to.cable) ||
+                (cable(n.cable) && n.cable) || (D.cables[0] && D.cables[0].id) || null;
+  }
+
+  b.innerHTML='<h2 class="title">'+esc(g.label)+'</h2>'+
+    '<p class="lead">Where does this output go? Into a FAT box, into another coupler or '+
+    'splitter, or into a strand that carries it further.</p>'+
+    '<div class="lbl">Into a FAT box</div>';
+
+  var fats=D.nodes.filter(function(x){ return x.type==='FATBOX'; });
+  if (!fats.length){
+    var e=document.createElement('div');
+    e.className='note'; e.textContent='No FAT boxes yet. Add one to a cable first.';
+    b.appendChild(e);
+  }
+  fats.forEach(function(fb){
+    var taken=feedOf(fb.id);
+    var mine = g.to && g.to.kind==='FATBOX' && g.to.node===fb.id;
+    var r=document.createElement('div');
+    r.className='row'+(mine?' on':'');
+    r.innerHTML='<span class="mk-fatbox" style="width:11px;height:11px;flex:0 0 11px;border-width:1px"></span>'+
+      '<span class="rowmain"><b>'+esc(fb.name)+'</b><div class="sub">'+
+      (fb.ports-usedPorts(fb))+' of '+fb.ports+' ports free'+
+      (taken && !mine ? ' \u00b7 already fed by '+esc(taken.node.name) : '')+'</div></span>';
+    if (taken && !mine){ r.style.opacity='.45'; r.style.cursor='not-allowed'; }
+    else r.onclick=function(){
+      g.to={ kind:'FATBOX', node:fb.id };
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+    b.appendChild(r);
+  });
+
+  /* into another device */
+  var l15=document.createElement('div');
+  l15.className='lbl'; l15.textContent='Or into another coupler or splitter';
+  b.appendChild(l15);
+
+  var devs=D.nodes.filter(function(x){
+    return (x.type==='COUPLER'||x.type==='SPLITTER') && x.id!==n.id;
+  });
+  if (!devs.length){
+    var e2=document.createElement('div');
+    e2.className='note'; e2.textContent='No other couplers or splitters yet.';
+    b.appendChild(e2);
+  }
+  devs.forEach(function(dv){
+    var mineD = g.to && g.to.kind==='DEVICE' && g.to.node===dv.id;
+    var fedBy = dv.inCable ? ('strand '+dv.inStrand+' of '+dv.inCable) : legFeedOf(dv.id);
+    var r=document.createElement('div');
+    r.className='row'+(mineD?' on':'');
+    r.innerHTML='<span class="'+markerClass(dv.type)+'" style="'+
+      (dv.type==='COUPLER'?'border-left-width:5px;border-right-width:5px;border-bottom-width:9px'
+       :'border-left-width:5px;border-right-width:5px;border-top-width:9px')+';flex:0 0 11px"></span>'+
+      '<span class="rowmain"><b>'+esc(dv.name)+'</b><div class="sub">'+
+      typeName(dv.type)+' '+esc(dv.ratio)+
+      (fedBy && !mineD ? ' \u00b7 already fed by '+esc(typeof fedBy==='string'?fedBy:fedBy.node.name) : '')+
+      '</div></span>';
+    if (fedBy && !mineD){ r.style.opacity='.45'; r.style.cursor='not-allowed'; }
+    else r.onclick=function(){
+      g.to={ kind:'DEVICE', node:dv.id };
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+    b.appendChild(r);
+  });
+
+  var l2=document.createElement('div');
+  l2.className='lbl'; l2.textContent='Or onward in a strand';
+  b.appendChild(l2);
+
+  if (!pickCable){
+    var noc=document.createElement('div');
+    noc.className='note warn'; noc.textContent='No cables drawn yet, so this output cannot continue in a strand.';
+    b.appendChild(noc);
+    var onlyBack=document.createElement('button');
+    onlyBack.className='btn'; onlyBack.textContent='\u2190 Back';
+    onlyBack.onclick=function(){ legPick=null; pickCable=null; view='node'; render(); };
+    f.appendChild(onlyBack);
+    return;
+  }
+
+  var sel2=document.createElement('div');
+  sel2.className='field';
+  sel2.innerHTML='<label>Cable</label><select id="pl_c">'+
+    D.cables.map(function(c){
+      return '<option value="'+c.id+'"'+(c.id===pickCable?' selected':'')+'>'+
+             c.id+' \u00b7 '+c.cores+'F</option>'; }).join('')+'</select>';
+  b.appendChild(sel2);
+
+  var c=cable(pickCable), uses=strandUses(pickCable);
+  var myAlong2=snapToPath(n.at, c.path).along;
+  var list=document.createElement('div');
+  list.className='slist';
+  var html='';
+  for (var i=1;i<=c.cores;i++){
+    var st=strandStatus(uses,i);
+    var mine2 = g.to && g.to.kind==='CABLE' && g.to.cable===pickCable && g.to.strand===i;
+    var chk2=attachCheck(uses,i,myAlong2,'SOURCE');
+    var busy = !mine2 && !chk2.ok;
+    html+='<button class="sbtn'+(mine2?' on':'')+'" data-n="'+i+'"'+(busy?' disabled':'')+'>'+
+      swatch(i)+'<span>'+strandLabel(i,c.cores)+'</span>'+
+      (strandEndsUsed(uses,i)?'<small>'+esc(busy?(chk2.why||'in use here'):st.text)+'</small>':'')+
+      '</button>';
+  }
+  list.innerHTML=html;
+  b.appendChild(list);
+
+  $('pl_c').onchange=function(){ pickCable=this.value; render(); };
+  [].slice.call(list.querySelectorAll('.sbtn')).forEach(function(btn){
+    btn.onclick=function(){
+      g.to={ kind:'CABLE', cable:pickCable, strand:parseInt(btn.dataset.n,10) };
+      legPick=null; pickCable=null; view='node'; draw(); render();
+    };
+  });
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ legPick=null; pickCable=null; view='node'; render(); };
+  f.appendChild(back);
+  if (g.to){
+    var clr=document.createElement('button');
+    clr.className='btn danger'; clr.textContent='Disconnect';
+    clr.onclick=function(){ g.to=null; legPick=null; pickCable=null; view='node'; draw(); render(); };
+    f.appendChild(clr);
+  }
+}
+
+/* ---------- edit forms ---------- */
+function editCable(b,f){
+  var c=cable(sel.cable);
+  b.innerHTML='<h2 class="title">Edit '+esc(c.id)+'</h2>'+
+    '<p class="lead">Metadata only. The route is edited by adding or removing points.</p>'+
+    '<div class="field"><label>Cable ID <i>*</i></label><input id="e_id" value="'+esc(c.id)+'"></div>'+
+    '<div class="two"><div class="field"><label>Cores</label><select id="e_cores">'+
+      CORE_OPTIONS.map(function(n){ return '<option'+(n===c.cores?' selected':'')+'>'+n+'</option>'; }).join('')+
+    '</select></div><div class="field"><label>Type</label><select id="e_kind">'+
+      ['Feeder','Distribution','Drop'].map(function(k){
+        return '<option'+(k===c.kind?' selected':'')+'>'+k+'</option>'; }).join('')+
+    '</select></div></div>'+
+    '<div class="field"><label>Note</label><input id="e_note" value="'+esc(c.note||'')+'"></div>'+
+    '<div class="msg" id="e_msg"></div>'+
+    '<div class="lbl">Route \u00b7 '+c.path.length+' points \u00b7 '+fmtM(pathLen(c.path))+'</div>';
+
+  c.path.forEach(function(p,i){
+    var r=document.createElement('div');
+    r.className='row';
+    r.innerHTML='<span class="mk-vtx" style="width:9px;height:9px;flex:0 0 9px"></span>'+
+      '<span class="rowmain"><b>'+(i===0?'Start':i===c.path.length-1?'End':'Bend '+i)+'</b>'+
+      '<div class="sub">'+p[1].toFixed(5)+', '+p[0].toFixed(5)+'</div></span>';
+    if (c.path.length>2){
+      var x=document.createElement('button');
+      x.className='ic del'; x.textContent='\u00D7'; x.style.marginLeft='auto';
+      x.onclick=function(){ c.path.splice(i,1); draw(); render(); };
+      r.appendChild(x);
+    }
+    b.appendChild(r);
+  });
+
+  var n=document.createElement('div');
+  n.className='note';
+  n.innerHTML='In the real thing you would drag a bend on the map. Here you can only remove points.';
+  b.appendChild(n);
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ view='cable'; render(); };
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Save';
+  save.onclick=function(){
+    var id=$('e_id').value.trim();
+    if (!id){ $('e_msg').className='msg bad'; $('e_msg').textContent='ID cannot be blank.'; return; }
+    if (id!==c.id && cable(id)){ $('e_msg').className='msg bad'; $('e_msg').textContent='That ID is taken.'; return; }
+    var newCores=parseInt($('e_cores').value,10);
+    var maxUsed=Math.max.apply(null,[0].concat(Object.keys(strandUses(c.id)).map(Number)));
+    if (newCores<maxUsed){
+      $('e_msg').className='msg bad';
+      $('e_msg').textContent='Strand '+maxUsed+' is in use, so it cannot drop to '+newCores+' cores.';
+      return;
+    }
+    if (id!==c.id){
+      D.nodes.forEach(function(x){ if(x.cable===c.id) x.cable=id; });
+      D.ports.forEach(function(x){ if(x.cable===c.id) x.cable=id; });
+      D.splices.forEach(function(x){
+        if(x.aCable===c.id) x.aCable=id;
+        if(x.bCable===c.id) x.bCable=id;
+      });
+      c.id=id; sel.cable=id;
+    }
+    c.cores=newCores; c.kind=$('e_kind').value; c.note=$('e_note').value.trim();
+    view='cable'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(save);
+}
+
+function editNode(b,f){
+  var n=node(sel.node);
+  b.innerHTML='<h2 class="title">Edit '+esc(n.name)+'</h2>'+
+    '<div class="field"><label>Name <i>*</i></label><input id="x_name" value="'+esc(n.name)+'"></div>'+
+    (n.type==='COUPLER'?'<div class="field"><label>Split ratio</label><select id="x_val">'+
+      COUPLER_VALUES.map(function(v){ return '<option value="'+v.ratio+'"'+(v.ratio===n.ratio?' selected':'')+'>'+
+        v.ratio+' \u00b7 tap '+v.tap+'% / pass '+v.pass+'%</option>'; }).join('')+
+      '</select></div>':'')+
+    (n.type==='SPLITTER'?'<div class="field"><label>Split ratio</label><select id="x_val">'+
+      SPLITTER_TYPES.map(function(v){ return '<option value="'+v.ratio+'"'+(v.ratio===n.ratio?' selected':'')+'>'+
+        v.ratio+' \u00b7 '+v.ways+' outputs</option>'; }).join('')+
+      '</select><div class="msg">Changing this rebuilds the output list and clears connections.</div></div>':'')+
+    (n.type==='FATBOX'?'<div class="two"><div class="field"><label>Box number</label>'+
+      '<input id="x_no" maxlength="3" value="'+esc(n.no)+'"></div>'+
+      '<div class="field"><label>Total ports</label><select id="x_ports">'+
+      [4,8,16,24].map(function(k){ return '<option'+(k===n.ports?' selected':'')+'>'+k+'</option>'; }).join('')+
+      '</select></div></div>'+
+      '<div class="msg">Customers are connected on the box\u2019s own screen, port by port.</div>':'')+
+    '<div class="field"><label>Note</label><input id="x_note" value="'+esc(n.note||'')+'"></div>'+
+    '<div class="msg" id="x_msg"></div>';
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ view='node'; render(); };
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Save';
+  save.onclick=function(){
+    var nm=$('x_name').value.trim();
+    if (!nm){ $('x_msg').className='msg bad'; $('x_msg').textContent='Name is required.'; return; }
+    if (n.type==='FATBOX'){
+      var raw=$('x_no').value.replace(/[^0-9]/g,''), v=parseInt(raw,10);
+      if (!(v>=1&&v<=999)){ $('x_msg').className='msg bad'; $('x_msg').textContent='Box number must be 1 to 999.'; return; }
+      var code=('00'+v).slice(-3);
+      if (D.nodes.some(function(x){ return x!==n&&x.type==='FATBOX'&&x.no===code; })){
+        $('x_msg').className='msg bad'; $('x_msg').textContent='FAT box '+code+' already exists.'; return;
+      }
+      var tot=parseInt($('x_ports').value,10);
+      var highest=(n.customers||[]).reduce(function(a,c){ return Math.max(a,c.port); },0);
+      if (tot<highest){
+        $('x_msg').className='msg bad';
+        $('x_msg').textContent='Port '+highest+' has a customer on it, so the box cannot shrink to '+tot+'.';
+        return;
+      }
+      n.no=code; n.ports=tot;
+    }
+    if (n.type==='COUPLER'||n.type==='SPLITTER'){
+      var newRatio=$('x_val').value;
+      if (newRatio!==n.ratio){ n.ratio=newRatio; n.legs=makeLegs(n.type, newRatio); }
+    }
+    n.name=nm; n.note=$('x_note').value.trim();
+    view='node'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(save);
+}
+
+function delCable(c){
+  var kids=nodesOn(c.id).length, users=portsUsing(c.id).length;
+  var msg='Delete '+c.id+'?';
+  if (kids||users) msg+='\n\n'+kids+' items sit on it and '+users+' ports use its strands. '+
+    'They will be detached, not deleted.';
+  if (!confirm(msg)) return;
+  D.cables=D.cables.filter(function(x){ return x.id!==c.id; });
+  D.nodes=D.nodes.filter(function(x){ return x.cable!==c.id; });
+  D.splices=D.splices.filter(function(x){ return x.aCable!==c.id&&x.bCable!==c.id; });
+  D.ports.forEach(function(p){ if(p.cable===c.id){ p.cable=null; p.strand=null; p.serves=null; } });
+  if (sel.cable===c.id) sel.cable=null;
+  view='home'; draw(); render();
+}
+
+
+/* ---------- rename, move and delete for the service side ---------- */
+function renameThing(rec, label){
+  var v=prompt(label+':', rec.name);
+  if (v===null) return;
+  v=String(v).trim();
+  if (!v) return;
+  rec.name=v; draw(); render();
+}
+
+function delOffice(o){
+  var olts=D.olts.filter(function(x){ return x.office===o.id; });
+  var ports=D.ports.filter(function(p){
+    return olts.some(function(x){ return x.id===p.olt; }); });
+  var live=ports.filter(function(p){ return p.cable; });
+
+  var msg='Delete '+o.name+'?';
+  if (olts.length) msg+='\n\n'+olts.length+' OLT'+(olts.length===1?'':'s')+' and '+
+    ports.length+' port'+(ports.length===1?'':'s')+' go with it.';
+  if (live.length) msg+='\n'+live.length+' of those port'+(live.length===1?' is':'s are')+
+    ' feeding a cable. The cables stay \u2014 they are still in the ground.';
+  if (!confirm(msg)) return;
+
+  D.ports=D.ports.filter(function(p){
+    return !olts.some(function(x){ return x.id===p.olt; }); });
+  D.olts=D.olts.filter(function(x){ return x.office!==o.id; });
+  D.offices=D.offices.filter(function(x){ return x.id!==o.id; });
+  if (sel.office===o.id) sel.office=null;
+  view='home'; draw(); render();
+}
+
+function delOlt(ol){
+  var ps=D.ports.filter(function(p){ return p.olt===ol.id; });
+  var live=ps.filter(function(p){ return p.cable; });
+  var msg='Delete '+ol.name+'?';
+  if (ps.length) msg+='\n\n'+ps.length+' port'+(ps.length===1?'':'s')+' go with it.';
+  if (live.length) msg+='\nThe cable'+(live.length===1?'':'s')+' they feed will stay.';
+  if (!confirm(msg)) return;
+  D.ports=D.ports.filter(function(p){ return p.olt!==ol.id; });
+  D.olts=D.olts.filter(function(x){ return x.id!==ol.id; });
+  if (sel.olt===ol.id){ sel.olt=null; view='office'; }
+  draw(); render();
+}
+
+function delPort(p){
+  var msg='Delete '+p.name+'?';
+  if (p.cable) msg+='\n\nIt feeds strand '+p.strand+' of '+p.cable+
+    '. The cable stays; that strand simply becomes free.';
+  if (!confirm(msg)) return;
+  D.ports=D.ports.filter(function(x){ return x.id!==p.id; });
+  if (sel.port===p.id){ sel.port=null; view='olt'; }
+  draw(); render();
+}
+
+/* ---------- edit an office: rename, or move it on the map ---------- */
+function editOfficeView(b,f){
+  var o=office(sel.office);
+  if (!o){ view='home'; return render(); }
+
+  b.innerHTML='<h2 class="title">Edit '+esc(o.name)+'</h2>'+
+    '<p class="lead">Rename it, or move it by typing new coordinates or clicking the map.</p>'+
+    '<div class="field"><label>Office name <i>*</i></label>'+
+    '<input id="eo_name" value="'+esc(o.name)+'"></div>'+
+    '<div class="two"><div class="field"><label>Latitude</label>'+
+    '<input id="eo_lat" inputmode="decimal" value="'+o.at[1].toFixed(6)+'"></div>'+
+    '<div class="field"><label>Longitude</label>'+
+    '<input id="eo_lng" inputmode="decimal" value="'+o.at[0].toFixed(6)+'"></div></div>'+
+    '<div class="msg" id="eo_msg"></div>';
+
+  var olts=D.olts.filter(function(x){ return x.office===o.id; });
+  var cabs=D.cables.filter(function(c){ return metres(c.path[0], o.at)<5; });
+  if (cabs.length){
+    var w=document.createElement('div');
+    w.className='note warn';
+    w.innerHTML='<b>'+cabs.length+' cable'+(cabs.length===1?'':'s')+'</b> start'+
+      (cabs.length===1?'s':'')+' at this office. Moving it does not move '+
+      (cabs.length===1?'that cable':'those cables')+' \u2014 edit the route separately.';
+    b.appendChild(w);
+  }
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ view='home'; render(); };
+
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Save';
+  save.onclick=function(){
+    var nm=($('eo_name').value||'').trim();
+    if (!nm){ $('eo_msg').className='msg bad'; $('eo_msg').textContent='Name is required.'; return; }
+    var la=parseFloat($('eo_lat').value), lg=parseFloat($('eo_lng').value);
+    if (!(la>=-90&&la<=90)||!(lg>=-180&&lg<=180)){
+      $('eo_msg').className='msg bad'; $('eo_msg').textContent='Those coordinates are not valid.'; return;
+    }
+    o.name=nm; o.at=[lg,la];
+    view='home'; draw(); render();
+  };
+
+  var del=document.createElement('button');
+  del.className='btn danger'; del.textContent='Delete';
+  del.onclick=function(){ delOffice(o); };
+
+  f.appendChild(cancel); f.appendChild(save); f.appendChild(del);
+}
+
+/* ---------- step 1: place an office ---------- */
+function officeDraft(b,f){
+  b.innerHTML='<h2 class="title">New office</h2>'+
+    '<p class="lead">Step 1 of 4. This is where the OLT lives and where every cable '+
+    'from it begins.</p>'+
+    '<div class="field"><label>Office name <i>*</i></label>'+
+    '<input id="o_name" placeholder="Ruby Hall Clinic" value="'+esc(draft.name)+'"></div>'+
+    '<div class="msg" id="o_msg"></div>'+
+
+    '<div class="lbl">Find the place</div>'+
+    '<div class="field"><label>Search an address or landmark</label>'+
+    '<input id="o_q" placeholder="Ruby Hall Clinic, Pune"></div>'+
+    '<div class="msg" id="o_qmsg"></div>'+
+    '<div id="o_hits"></div>'+
+
+    '<div class="orsep">OR</div>'+
+    '<div class="field"><label>Google Maps link</label>'+
+    '<input id="o_link" placeholder="Paste a Google Maps link"></div>'+
+    '<div class="msg" id="o_lmsg"></div>'+
+
+    '<div class="orsep">OR</div>'+
+    '<div class="two"><div class="field"><label>Latitude</label>'+
+    '<input id="o_lat" inputmode="decimal" placeholder="18.532718" value="'+
+      (draft.at?draft.at[1].toFixed(6):'')+'"></div>'+
+    '<div class="field"><label>Longitude</label>'+
+    '<input id="o_lng" inputmode="decimal" placeholder="73.877749" value="'+
+      (draft.at?draft.at[0].toFixed(6):'')+'"></div></div>'+
+
+    '<div class="note">'+(draft.at
+      ? 'Placed at '+draft.at[1].toFixed(5)+', '+draft.at[0].toFixed(5)+
+        ' \u00b7 click the map again to move it'
+      : 'Not placed yet. Search, paste a link, type coordinates, or click the map.')+'</div>';
+
+  $('o_name').oninput=function(){ draft.name=this.value; };
+
+  function place(at, note){
+    draft.at=at;
+    if (note && !draft.name) { draft.name=note; }
+    draw(); render();
+  }
+
+  ['o_lat','o_lng'].forEach(function(id){
+    $(id).onchange=function(){
+      var la=parseFloat($('o_lat').value), lg=parseFloat($('o_lng').value);
+      if (la>=-90&&la<=90&&lg>=-180&&lg<=180) place([lg,la]);
+    };
+  });
+
+  $('o_link').onchange=function(){
+    var v=this.value.trim(), m=$('o_lmsg');
+    if (!v){ m.className='msg'; m.textContent=''; return; }
+    var at=coordsFromLink(v);
+    if (at){
+      m.className='msg good';
+      m.textContent='Found '+at[1].toFixed(6)+', '+at[0].toFixed(6);
+      place(at);
+    } else if (isShortLink(v) && online()){
+      m.className='msg'; m.textContent='Following the link\u2026';
+      resolveViaServer(v).then(function(got){
+        if (got){
+          m.className='msg good';
+          m.textContent='Found '+got[1].toFixed(6)+', '+got[0].toFixed(6);
+          place(got);
+        } else {
+          m.className='msg bad';
+          m.textContent='That link does not carry coordinates. Search above instead.';
+        }
+      });
+    } else if (isShortLink(v)){
+      m.className='msg bad';
+      m.innerHTML='Short links need the sheet backend to follow them. Open it in Google '+
+        'Maps and copy the long address \u2014 the part with <b>@</b> and two numbers.';
+    } else {
+      m.className='msg bad';
+      m.textContent='No coordinates in that link. Search above or type them below.';
+    }
+  };
+
+  var qt=null;
+  $('o_q').oninput=function(){
+    var q=this.value.trim(), m=$('o_qmsg'), hits=$('o_hits');
+    clearTimeout(qt);
+    if (q.length<3){ m.textContent=''; hits.innerHTML=''; return; }
+    m.className='msg'; m.textContent='Searching\u2026';
+    qt=setTimeout(function(){
+      fetch('https://photon.komoot.io/api/?limit=5&lat=18.52&lon=73.86&q='+encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(js){
+          var fs=(js.features||[]);
+          m.textContent = fs.length ? '' : 'Nothing found. Try a landmark or paste a link.';
+          hits.innerHTML='';
+          fs.forEach(function(ft){
+            var p=ft.properties||{};
+            var label=[p.name,p.street,p.city,p.state].filter(Boolean).join(', ');
+            var r=document.createElement('div');
+            r.className='row';
+            r.innerHTML='<span class="mk-office" style="width:10px;height:10px;flex:0 0 10px;border-width:1px"></span>'+
+              '<span class="rowmain"><b>'+esc(p.name||label)+'</b><div class="sub">'+esc(label)+'</div></span>';
+            r.onclick=function(){
+              place([ft.geometry.coordinates[0], ft.geometry.coordinates[1]], p.name||'');
+            };
+            hits.appendChild(r);
+          });
+        })
+        .catch(function(){
+          m.className='msg bad';
+          m.textContent='Search is unavailable. Paste a link or type coordinates.';
+        });
+    }, 350);
+  };
+
+  var cancel=document.createElement('button');
+  cancel.className='btn'; cancel.textContent='Cancel';
+  cancel.onclick=function(){ draft=null; draw(); render(); };
+
+  var save=document.createElement('button');
+  save.className='btn primary'; save.textContent='Save office';
+  save.disabled=!draft.at;
+  save.onclick=function(){
+    var nm=($('o_name').value||'').trim();
+    if (!nm){ $('o_msg').className='msg bad'; $('o_msg').textContent='Give the office a name.'; return; }
+    var id=nextId('L', D.offices);
+    D.offices.push({ id:id, name:nm, at:draft.at });
+    draft=null; sel.office=id; view='office'; draw(); render();
+  };
+  f.appendChild(cancel); f.appendChild(save);
+}
+
+/* ---------- step 2: OLTs at an office ---------- */
+function officeView(b,f){
+  var o=office(sel.office);
+  if (!o){ view='home'; return render(); }
+  var olts=D.olts.filter(function(x){ return x.office===o.id; });
+
+  b.innerHTML='<h2 class="title">'+esc(o.name)+'</h2>'+
+    '<p class="lead">Step 2 of 4. An office holds one or more OLTs. Each OLT is a powered '+
+    'box in a rack \u2014 the only thing here that makes light.</p>';
+
+  var l=document.createElement('div');
+  l.className='lbl'; l.innerHTML='OLTs <span class="r">'+olts.length+'</span>';
+  b.appendChild(l);
+
+  if (!olts.length){
+    var e=document.createElement('div');
+    e.className='note'; e.textContent='No OLT yet. Add one to start building from here.';
+    b.appendChild(e);
+  }
+
+  olts.forEach(function(ol){
+    var ps=D.ports.filter(function(p){ return p.olt===ol.id; });
+    var r=document.createElement('div');
+    r.className='row';
+    r.innerHTML='<span class="mk-office" style="width:11px;height:11px;border-width:1px"></span>'+
+      '<span class="rowmain"><b>'+esc(ol.name)+'</b><div class="sub">'+
+      ps.length+(ps.length===1?' port':' ports')+' \u00b7 '+
+      ps.filter(function(p){ return p.cable; }).length+' connected</div></span>';
+    var ob2=document.createElement('span'); ob2.className='rowbtns';
+    var oe2=document.createElement('button');
+    oe2.className='ic'; oe2.textContent='\u270E'; oe2.title='Rename';
+    oe2.onclick=function(e){ e.stopPropagation(); renameThing(ol, 'OLT name'); };
+    var od2=document.createElement('button');
+    od2.className='ic del'; od2.textContent='\u00D7'; od2.title='Delete';
+    od2.onclick=function(e){ e.stopPropagation(); delOlt(ol); };
+    ob2.appendChild(oe2); ob2.appendChild(od2);
+    r.appendChild(ob2);
+    r.onclick=function(){ sel.olt=ol.id; view='olt'; draw(); render(); };
+    b.appendChild(r);
+  });
+
+  var add=document.createElement('button');
+  add.className='btn soft'; add.style.width='100%'; add.textContent='+  Add an OLT';
+  add.onclick=function(){
+    var id=nextId('O', D.olts);
+    D.olts.push({ id:id, office:o.id, name:'OLT '+(olts.length+1) });
+    draw(); render();          // stay here, so several can be added in a row
+  };
+  b.appendChild(add);
+
+  var hint3=document.createElement('div');
+  hint3.className='note';
+  hint3.innerHTML='Add every OLT at this office first, then open one to give it ports.';
+  b.appendChild(hint3);
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ sel.office=null; view='home'; draw(); render(); };
+  f.appendChild(back);
+}
+
+/* ---------- step 4: one port, and the cable that leaves it ---------- */
+function portView(b,f){
+  var p=D.ports.filter(function(x){ return x.id===sel.port; })[0];
+  if (!p){ view='olt'; return render(); }
+  var ol=olt(p.olt), off=office(ol.office);
+  var c=p.cable ? cable(p.cable) : null;
+
+  b.innerHTML='<h2 class="title">'+esc(ol.name)+' \u00b7 '+esc(p.name)+'</h2>'+
+    '<p class="lead">Step 4 of 4. A port feeds exactly one strand of one cable, and that '+
+    'cable starts here at '+esc(off.name)+'.</p>'+
+    '<div class="lbl">Carried by</div>';
+
+  var r=document.createElement('div');
+  r.className='row'; r.style.cursor=c?'pointer':'default';
+  r.innerHTML = c
+    ? swatch(p.strand)+'<span class="rowmain"><b>'+esc(c.id)+'</b><div class="sub">strand '+
+      strandLabel(p.strand,c.cores)+' \u00b7 '+c.cores+'F \u00b7 '+fmtM(pathLen(c.path))+'</div></span>'
+    : '<span class="swatch" style="background:#EDEFF1"></span>'+
+      '<span class="rowmain"><b class="dim">Nothing yet</b><div class="sub">'+
+      'draw a cable out from the office, or use a strand in one that already passes</div></span>';
+  if (c) r.onclick=function(){ sel.cable=c.id; view='cable'; draw(); render(); zoomTo(c.path); };
+  b.appendChild(r);
+
+  if (!c){
+    var l=document.createElement('div');
+    l.className='lbl'; l.textContent='Start the run';
+    b.appendChild(l);
+
+    var draw1=document.createElement('button');
+    draw1.className='btn primary'; draw1.style.cssText='width:100%;margin-bottom:8px';
+    draw1.textContent='Draw a new cable from this office';
+    draw1.onclick=function(){
+      draft={ kind:'route', path:[off.at.slice()], id:nextId('F',D.cables),
+              cores:12, kindName:'Feeder', note:'', fromPort:p.id };
+      draw(); render();
+    };
+    b.appendChild(draw1);
+
+    var near=D.cables.filter(function(cb){
+      return snapToPath(off.at, cb.path).dist < 60;
+    });
+    near.forEach(function(cb){
+      var uses=strandUses(cb.id), along=snapToPath(off.at, cb.path).along;
+      var freeS=null;
+      for (var i=1;i<=cb.cores;i++){ if (canAttachAt(uses,i,along,'SOURCE')){ freeS=i; break; } }
+      var rr=document.createElement('div');
+      rr.className='row';
+      rr.innerHTML='<span class="cabledash"></span><span class="rowmain"><b>'+esc(cb.id)+
+        '</b><div class="sub">already passes this office \u00b7 '+cb.cores+'F</div></span>'+
+        '<span class="meta">'+(freeS?'use strand '+freeS:'no room')+'</span>';
+      if (freeS) rr.onclick=function(){
+        p.cable=cb.id; p.strand=freeS; draw(); render();
+      };
+      else rr.style.opacity='.45';
+      b.appendChild(rr);
+    });
+
+    var nn=document.createElement('div');
+    nn.className='note';
+    nn.innerHTML='Only a <b>cable</b> can leave a port. Couplers, splitters and FAT boxes '+
+      'all sit further out, on the cable \u2014 never bolted straight onto the OLT.';
+    b.appendChild(nn);
+  } else {
+    var l2=document.createElement('div');
+    l2.className='lbl'; l2.textContent='Where this strand goes';
+    b.appendChild(l2);
+
+    var uses2=strandUses(c.id);
+    var chain=strandChain(uses2, p.strand) || 'nothing else on it yet';
+    var cr=document.createElement('div');
+    cr.className='note';
+    cr.innerHTML=esc(chain);
+    b.appendChild(cr);
+
+    var dis=document.createElement('button');
+    dis.className='btn danger'; dis.style.cssText='width:100%;margin-top:9px';
+    dis.textContent='Disconnect this port';
+    dis.onclick=function(){
+      if (!confirm('Disconnect '+p.name+' from '+c.id+'?')) return;
+      p.cable=null; p.strand=null; p.serves=null; draw(); render();
+    };
+    b.appendChild(dis);
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ sel.port=null; view='olt'; draw(); render(); };
+  f.appendChild(back);
+}
+
+/* ---------- OLT ---------- */
+function oltView(b,f){
+  var o=olt(sel.olt), ps=D.ports.filter(function(p){ return p.olt===o.id; });
+  b.innerHTML='<h2 class="title">'+esc(o.name)+'</h2>'+
+    '<p class="lead">Step 3 of 4. At '+esc(office(o.office).name)+'. Each port is one '+
+    'laser, and each one feeds a single strand.</p>';
+
+  var l=document.createElement('div');
+  l.className='lbl';
+  l.innerHTML='Ports <span class="r">'+ps.filter(function(p){return p.cable;}).length+
+    ' of '+ps.length+' connected</span>';
+  b.appendChild(l);
+
+  if (!ps.length){
+    var e=document.createElement('div');
+    e.className='note'; e.textContent='No ports yet. Add one, then draw a cable out from it.';
+    b.appendChild(e);
+  }
+
+  ps.forEach(function(p){
+    var r=document.createElement('div');
+    r.className='row';
+    r.innerHTML=(p.strand?swatch(p.strand):'<span class="swatch" style="background:#EDEFF1"></span>')+
+      '<span class="rowmain"><b>'+esc(p.name)+'</b><div class="sub">'+
+      (p.cable? 'cable '+esc(p.cable)+' \u00b7 strand '+strandLabel(p.strand, cable(p.cable).cores)
+              : '<span class="dim">not connected</span>')+'</div></span>'+
+      '';
+    var pb=document.createElement('span'); pb.className='rowbtns';
+    var pe=document.createElement('button');
+    pe.className='ic'; pe.textContent='\u270E'; pe.title='Rename';
+    pe.onclick=function(e){ e.stopPropagation(); renameThing(p, 'Port name'); };
+    var pd=document.createElement('button');
+    pd.className='ic del'; pd.textContent='\u00D7'; pd.title='Delete';
+    pd.onclick=function(e){ e.stopPropagation(); delPort(p); };
+    pb.appendChild(pe); pb.appendChild(pd);
+    r.appendChild(pb);
+    r.onclick=function(){ sel.port=p.id; view='port'; draw(); render(); };
+    b.appendChild(r);
+  });
+
+  var addp=document.createElement('button');
+  addp.className='btn soft'; addp.style.width='100%'; addp.textContent='+  Add a port';
+  addp.onclick=function(){
+    D.ports.push({ id:nextId('P',D.ports), olt:o.id, name:'Port '+(ps.length+1),
+                   cable:null, strand:null, serves:null });
+    draw(); render();          // stay here, so a whole card of ports can be added
+  };
+  b.appendChild(addp);
+
+  var addp8=document.createElement('button');
+  addp8.className='btn'; addp8.style.cssText='width:100%;margin-top:6px';
+  addp8.textContent='+  Add 8 ports';
+  addp8.onclick=function(){
+    for (var k=0;k<8;k++){
+      var cur=D.ports.filter(function(p){ return p.olt===o.id; }).length;
+      D.ports.push({ id:nextId('P',D.ports), olt:o.id, name:'Port '+(cur+1),
+                     cable:null, strand:null, serves:null });
+    }
+    draw(); render();
+  };
+  b.appendChild(addp8);
+
+  var n=document.createElement('div');
+  n.className='note';
+  n.innerHTML='The OLT owns no cable. Each port borrows one strand in whichever cable runs the right way.';
+  b.appendChild(n);
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ sel.olt=null; view=sel.office?'office':'home'; draw(); render(); };
+  f.appendChild(back);
+}
+
+/* ---------- summary ---------- */
+function summaryView(b,f){
+  var totalCores=0, usedCores=0, km=0;
+  D.cables.forEach(function(c){
+    totalCores+=c.cores;
+    usedCores+=Object.keys(strandUses(c.id)).length;
+    km+=pathLen(c.path);
+  });
+  var fats=D.nodes.filter(function(n){ return n.type==='FATBOX'; });
+  var fp=fats.reduce(function(a,n){ return a+n.ports; },0);
+  var fu=fats.reduce(function(a,n){ return a+usedPorts(n); },0);
+
+  b.innerHTML='<h2 class="title">Network summary</h2>'+
+    '<p class="lead">Everything recorded, counted.</p>'+
+    '<div class="stat"><div class="box"><div class="n">'+D.cables.length+'</div><div class="t">cables</div></div>'+
+    '<div class="box"><div class="n">'+fmtM(km)+'</div><div class="t">in the ground</div></div></div>'+
+    '<div class="stat"><div class="box"><div class="n">'+D.nodes.filter(function(n){return n.type==='JOINT';}).length+
+    '</div><div class="t">joints</div></div>'+
+    '<div class="box"><div class="n">'+D.splices.length+'</div><div class="t">splices</div></div>'+
+    '<div class="box"><div class="n">'+fats.length+'</div><div class="t">FAT boxes</div></div></div>'+
+    '<div class="stat"><div class="box"><div class="n">'+
+      D.nodes.filter(function(n){return n.type==='COUPLER';}).length+
+    '</div><div class="t">couplers</div></div>'+
+    '<div class="box"><div class="n">'+
+      D.nodes.filter(function(n){return n.type==='SPLITTER';}).length+
+    '</div><div class="t">splitters</div></div>'+
+    '<div class="box"><div class="n">'+
+      D.nodes.filter(function(n){ return n.legs; })
+        .reduce(function(a,n){ return a+n.legs.filter(function(g){ return !g.to; }).length; },0)+
+    '</div><div class="t">spare outputs</div></div></div>'+
+    '<div class="lbl">Strand capacity</div>'+
+    '<div class="cap"><i style="width:'+Math.round(usedCores/(totalCores||1)*100)+'%"></i></div>'+
+    '<div class="kv" style="margin-top:5px">'+usedCores+' of '+totalCores+' strands used \u00b7 '+
+    '<span class="free">'+(totalCores-usedCores)+' spare</span></div>'+
+    '<div class="lbl">Customer capacity</div>'+
+    '<div class="cap"><i style="width:'+Math.round(fu/(fp||1)*100)+'%"></i></div>'+
+    '<div class="kv" style="margin-top:5px">'+fu+' of '+fp+' FAT ports used \u00b7 '+
+    '<span class="free">'+(fp-fu)+' available</span></div>'+
+    '<div class="lbl">Cables by use</div>';
+
+  var tb=document.createElement('table'); tb.className='tbl';
+  tb.innerHTML='<thead><tr><th>Cable</th><th>Cores</th><th>Free</th><th>Length</th></tr></thead><tbody>'+
+    D.cables.map(function(c){
+      var free=freeCount(c);
+      return '<tr><td>'+esc(c.id)+'</td><td>'+c.cores+'</td>'+
+        '<td class="'+(free?'free':'dim')+'">'+free+'</td>'+
+        '<td>'+fmtM(pathLen(c.path))+'</td></tr>';
+    }).join('')+'</tbody>';
+  b.appendChild(tb);
+
+  var unfed=D.nodes.filter(function(n){
+    if (n.type==='FATBOX') return !feedOf(n.id);
+    return n.legs && !n.inCable && !legFeedOf(n.id);
+  });
+  if (unfed.length){
+    var uw=document.createElement('div');
+    uw.className='note warn';
+    uw.innerHTML='<b>'+unfed.map(function(n){ return n.name; }).join(', ')+
+      '</b> '+(unfed.length===1?'has':'have')+' nothing feeding '+
+      (unfed.length===1?'it':'them')+' yet, so no light can reach '+
+      (unfed.length===1?'it':'them')+'.';
+    b.appendChild(uw);
+  }
+
+  var full=fats.filter(function(n){ return n.ports-n.used===0; });
+  if (full.length){
+    var w=document.createElement('div');
+    w.className='note warn';
+    w.innerHTML='<b>'+full.map(function(n){return n.name;}).join(', ')+
+      '</b> '+(full.length===1?'is':'are')+' full. Any customer near '+
+      (full.length===1?'it':'them')+' needs new plant, not just a drop cable.';
+    b.appendChild(w);
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ view='home'; render(); };
+  f.appendChild(back);
+}
+
+/* ---------- search nearby: for whoever is standing outside a building ---------- */
+function nearbyView(b,f){
+  b.innerHTML='<h2 class="title">Search nearby</h2>'+
+    '<p class="lead">Set the point you are asking about, then see the closest FAT boxes '+
+    'and whether any have a free port.</p>'+
+    '<div class="field"><label>Google Maps link or coordinates</label>'+
+    '<input id="nb_link" placeholder="Paste a link, or 18.5305, 73.8781"></div>'+
+    '<div class="msg'+(nbMsg?' '+nbMsg.cls:'')+'" id="nb_msg">'+
+      (nbMsg ? esc(nbMsg.text) : 'Or just click anywhere on the map.')+'</div>';
+
+  $('nb_link').onchange=function(){
+    var v=this.value.trim(), m=$('nb_msg');
+    if (!v){ m.className='msg'; m.textContent='Or just click anywhere on the map.'; return; }
+    var at=coordsFromLink(v);
+    if (at){
+      salesPoint=at;
+      nbMsg={ cls:'good', text:'Found '+at[1].toFixed(6)+', '+at[0].toFixed(6) };
+      draw(); render();
+      map.easeTo({ center:at, zoom:Math.max(map.getZoom(),16), duration:600 });
+    } else if (isShortLink(v) && online()){
+      m.className='msg'; m.textContent='Following the link\u2026';
+      resolveViaServer(v).then(function(got){
+        if (got){
+          salesPoint=got;
+          nbMsg={ cls:'good', text:'Found '+got[1].toFixed(6)+', '+got[0].toFixed(6) };
+          draw(); render();
+          map.easeTo({ center:got, zoom:Math.max(map.getZoom(),16), duration:600 });
+        } else {
+          m.className='msg bad'; m.textContent='No coordinates in that link. Click the map instead.';
+        }
+      });
+    } else if (isShortLink(v)){
+      m.className='msg bad';
+      m.innerHTML='Short links need the sheet backend to follow them. Copy the long '+
+        'address from Google Maps, or click the map.';
+    } else {
+      m.className='msg bad'; m.textContent='No coordinates in that. Click the map instead.';
+    }
+  };
+
+  if (!salesPoint){
+    var e=document.createElement('div');
+    e.className='note';
+    e.textContent='No point set yet. Click the map, paste a link, or type coordinates.';
+    b.appendChild(e);
+  } else {
+    var fats=D.nodes.filter(function(n){ return n.type==='FATBOX'; })
+      .map(function(n){ return { n:n, d:metres(salesPoint,n.at) }; })
+      .sort(function(a,z){ return a.d-z.d; }).slice(0,10);
+
+    var l=document.createElement('div');
+    l.className='lbl';
+    l.innerHTML='Closest FAT boxes <span class="r">'+fats.length+'</span>';
+    b.appendChild(l);
+
+    if (!fats.length){
+      var e2=document.createElement('div');
+      e2.className='note'; e2.textContent='No FAT boxes on the map yet.';
+      b.appendChild(e2);
+    }
+
+    fats.forEach(function(h){
+      var n=h.n, free=n.ports-usedPorts(n), fd=feedOf(n.id);
+      var r=document.createElement('div');
+      r.className='row';
+      r.innerHTML='<span class="mk-fatbox" style="width:11px;height:11px;flex:0 0 11px;border-width:1px"></span>'+
+        '<span class="rowmain"><b>'+esc(n.name)+'</b><div class="sub '+(free?'free':'dim')+'">'+
+        (free?free+' of '+n.ports+' ports free':'full \u2014 no capacity')+
+        (fd?' \u00b7 fed by '+esc(fd.leg?fd.node.name:n.inCable):'')+'</div></span>'+
+        '<span class="meta">'+fmtM(h.d)+'</span>';
+      r.onclick=function(){
+        sel.node=n.id; view='node'; draw(); render();
+        map.easeTo({ center:n.at, zoom:17, duration:600 });
+      };
+      b.appendChild(r);
+    });
+  }
+
+  var back=document.createElement('button');
+  back.className='btn'; back.textContent='\u2190 Back';
+  back.onclick=function(){ salesPoint=null; nbMsg=null; view='home'; draw(); render(); };
+  f.appendChild(back);
+
+  if (salesPoint){
+    var clr=document.createElement('button');
+    clr.className='btn'; clr.textContent='Clear point';
+    clr.onclick=function(){ salesPoint=null; nbMsg=null; draw(); render(); };
+    f.appendChild(clr);
+  }
+}
+
+/* ---------- sales ---------- */
+function salesView(b,f){
+  b.innerHTML='<h2 class="title">Nearest connection points</h2>'+
+    '<p class="lead">Tap the map where the customer is. No cables, no strands, no editing.</p>';
+  if (!salesPoint){
+    var e=document.createElement('div');
+    e.className='note'; e.textContent='No point set. Tap the map.';
+    b.appendChild(e); return;
+  }
+  D.nodes.filter(function(n){ return n.type==='FATBOX'; })
+    .map(function(n){ return { n:n, d:metres(salesPoint,n.at) }; })
+    .sort(function(a,z){ return a.d-z.d; })
+    .forEach(function(h){
+      var n=h.n, free=n.ports-usedPorts(n);
+      var r=document.createElement('div');
+      r.className='row';
+      r.innerHTML='<span class="mk-fatbox" style="width:11px;height:11px;flex:0 0 11px;border-width:1px"></span>'+
+        '<span class="rowmain"><b>'+esc(n.name)+'</b><div class="sub '+(free?'free':'')+'">'+
+        (free?free+' of '+n.ports+' ports free':'full \u2014 no capacity')+'</div></span>'+
+        '<span class="meta">'+fmtM(h.d)+'</span>';
+      r.onclick=function(){ map.easeTo({center:n.at,zoom:17,duration:600}); nodePopup(n); };
+      b.appendChild(r);
+    });
+  var reset=document.createElement('button');
+  reset.className='btn'; reset.textContent='Clear point';
+  reset.onclick=function(){ salesPoint=null; draw(); render(); };
+  f.appendChild(reset);
+}
+
+/* ---------- the Excel toolbar ---------- */
+document.getElementById('btnPull').onclick=function(){
+  if (!online()){ alert('No sheet is configured. Set API and KEY at the top of the file.'); return; }
+  if (dirty && !confirm('There are unsaved changes. Reload from the sheet and lose them?')) return;
+  pullFromServer().then(function(){ draw(); render(); fitAll(); });
+};
+document.getElementById('btnSave').onclick=saveExcel;
+document.getElementById('btnLoad').onclick=function(){ document.getElementById('fileIn').click(); };
+document.getElementById('fileIn').onchange=function(){
+  if (this.files && this.files[0]) loadExcel(this.files[0]);
+  this.value='';
+};
+document.getElementById('btnReset').onclick=function(){
+  if (!confirm('Clear everything and start from an empty map?\n\n' +
+               (online() ? 'This will also empty the sheet on the next save. '
+                         : '') +
+               'Download an Excel copy first if you want to keep this.')) return;
+  D={ cables:[], nodes:[], splices:[], offices:[], olts:[], ports:[] };
+  sel={ cable:null, node:null, olt:null, office:null, port:null };
+  view='home'; draft=null; custDraft=null; legPick=null; pick=null;
+  persist(); draw(); render();
+};
+
+/* ---------- roles ---------- */
+$('rEng').onclick=function(){
+  role='eng'; view='home'; draft=null; salesPoint=null;
+  $('rEng').setAttribute('aria-pressed','true'); $('rSales').setAttribute('aria-pressed','false');
+  if (popup) popup.remove();
+  draw(); render();
+};
+$('rSales').onclick=function(){
+  role='sales'; draft=null; sel={cable:null,node:null,olt:null};
+  $('rEng').setAttribute('aria-pressed','false'); $('rSales').setAttribute('aria-pressed','true');
+  if (popup) popup.remove();
+  draw(); render();
+};
+
+})();
+</script>
+</body>
+</html>
